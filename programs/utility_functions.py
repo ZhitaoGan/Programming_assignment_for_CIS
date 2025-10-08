@@ -184,11 +184,21 @@ def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="."):
     F_D_list = [F_D_matrices[i].reshape(4, 4) for i in range(N_frames)]
     
     # Get EM and optical pivot tip positions (from previous calibration results)
-    em_pivot_result = np.loadtxt(f"{output_dir}/A_EM_pivot.txt", delimiter=",")
-    opt_pivot_result = np.loadtxt(f"{output_dir}/A_Optpivot.txt", delimiter=",")
+    # Extract dataset name from output_file (e.g., "pa1-debug-a-output1" -> "PA1-DEBUG-A")
+    dataset_name = output_file.replace("-output1", "").upper().replace("-", "-")
+    if dataset_name.startswith("PA1-DEBUG-"):
+        dataset_prefix = dataset_name
+    elif dataset_name.startswith("PA1-UNKNOWN-"):
+        dataset_prefix = dataset_name
+    else:
+        # Fallback for other naming conventions
+        dataset_prefix = f"PA1-DEBUG-{dataset_name[-1].upper()}"
     
-    em_tip = em_pivot_result[0]  # First row is tip position
-    opt_tip = opt_pivot_result[0]  # First row is tip position
+    em_pivot_result = np.loadtxt(f"{output_dir}/{dataset_prefix}_EM_pivot.txt", delimiter=",")
+    opt_pivot_result = np.loadtxt(f"{output_dir}/{dataset_prefix}_Optpivot.txt", delimiter=",")
+    
+    em_tip = em_pivot_result[1]  # Second row is pivot point (actual tip position)
+    opt_tip = opt_pivot_result[1]  # Second row is pivot point (actual tip position)
     
     # Calculate expected C coordinates for each frame
     C_expected_all = []
@@ -199,8 +209,8 @@ def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="."):
         F_D_transform = FrameTransform(F_D[:3, :3], F_D[:3, 3])
         F_A_transform = FrameTransform(F_A[:3, :3], F_A[:3, 3])
         
-        # Calculate expected C coordinates: F_D^(-1) * F_A * c_points
-        C_expected = F_D_transform.inverse().compose(F_A_transform).transform_points(cal_body["c_points"])
+        # Calculate expected C coordinates: F_D * F_A^(-1) * c_points
+        C_expected = F_D_transform.compose(F_A_transform.inverse()).transform_points(cal_body["c_points"])
         C_expected_all.append(C_expected)
     
     # Write output file in NAME-OUTPUT1.TXT format
@@ -249,9 +259,8 @@ def opt_pivot(optpivot, cal_body, output_file2, output_dir="."):
         output_file2 (str): Name of the output file
         output_dir (str): Output directory path
     """
-    # TODO: Implement optical pivot calibration
-    # This function appears to be used for problem 6
-    result = pivot_calibration.opt_pivot_calibration(optpivot)
+    # Use the new integrated optical pivot calibration with EM geometry
+    result = pivot_calibration.opt_pivot_calibration(optpivot, cal_body)
     p_tip = result['tip_position']
     p_pivot = result['pivot_point']
     residual_error = result['residual_error']
