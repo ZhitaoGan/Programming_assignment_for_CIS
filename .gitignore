@@ -129,4 +129,6 @@ dmypy.json
 .pyre/
 
 **.DS_Store
-#output
+# CISPA project specific
+output/
+logging/*.log
