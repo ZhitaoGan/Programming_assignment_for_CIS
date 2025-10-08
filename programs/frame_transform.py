@@ -59,7 +59,7 @@ class FrameTransform:
         points = np.asarray(points,dtype=float)
         if points.shape[1] != 3:
             raise ValueError("Points must be a Nx3 array")
-        transformed_points = np.dot(self.rotation_matrix, points.T) + self.translation_vector.reshape(-1, 1)
+        transformed_points = np.dot(self.rotation_matrix, points.T) + self.translation_vector.reshape(3, 1)
         return transformed_points.T  # Transpose back to Nx3
     
     def inverse(self) -> 'FrameTransform':

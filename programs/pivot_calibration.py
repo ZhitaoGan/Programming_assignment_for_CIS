@@ -6,22 +6,80 @@ Used for determining the pivot point of a tracked tool.
 """
 
 import numpy as np
+from programs.frame_transform import FrameTransform
 
+# helper function to calculate the pivot point
+def as_frames(data):
+    """
+    return a list of (N,3) arrays, where each array is a frame of data
+    
+    Args:
+        data (dict): Dictionary containing pivot calibration data
+    """
+    if isinstance(data, dict) and "frames" in data:
+        return [np.asarray(f, dtype=float) for f in data["frames"]]
+    return [np.asarray(f, dtype=float) for f in data]
+def first_frame_centroid(frames):
+    """
+    Used the first frame to define the local coordinate system
+    return the local coordinate system
+    
+    Args:
+        frames (list): List of (N,3) arrays
+    """
+    first_frame = np.asarray(frames[0], dtype=float)
+    centroid = np.mean(first_frame, axis=0)
+    g_local = first_frame - centroid
+    return g_local
+
+def poses_from_frames(local_coord, frames):
+    """
+    return lists of rotation matrices and translation vectors
+    
+    Args:
+        local_coord (np.ndarray): Local coordinate system
+        frames (list): List of (N,3) arrays
+    """
+    R_list, p_list = [], []
+    for frame in frames:
+        pose = FrameTransform.Point_set_registration(local_coord, frame)
+        R_list.append(pose.rotation_matrix)
+        p_list.append(pose.translation_vector)
+    return R_list, p_list
+
+def solve_for_pivot(R_list, p_list):
+    """
+    return the tip position and pivot point
+    
+    Args:
+        R_list (list): List of rotation matrices
+        p_list (list): List of translation vectors
+    """
+    # Stack rotation matrices and identity matrices
+    R_stack = np.vstack([np.hstack([R, -np.eye(3)]) for R in R_list])
+    p_stack = -np.concatenate(p_list)
+    
+    # Solve least squares problem
+    x, residuals, rank, s = np.linalg.lstsq(R_stack, p_stack, rcond=None)
+    p_tip = x[:3]
+    p_pivot = x[3:]
+
+    # residual error
+    residual_error = np.linalg.norm(R_stack @ x - p_stack)
+    return p_tip, p_pivot, residual_error
 
 def pivot_calibration(pivot_data):
     """
-    Perform pivot calibration to find the pivot point of a tracked tool.
-    
-    This function calculates the pivot point by finding the point that minimizes
-    the sum of squared distances to all the tool tip positions.
+    Perform pivot calibration using the least squares method
     
     Args:
         pivot_data (dict): Dictionary containing pivot calibration data
-            - 'positions': List of tool tip positions (Nx3 array)
-            - 'orientations': List of tool orientations (Nx3x3 array)
+            - 'tip_positions': List of tool tip positions (Nx3 array)
+            - 'orient_frames': List of tool orientations (Nx3x3 array)
     
     Returns:
         dict: Dictionary containing calibration results
+            - 'tip_position': 3x1 array representing the tip position
             - 'pivot_point': 3x1 array representing the pivot point
             - 'residual_error': Scalar representing the residual error
     """
@@ -31,17 +89,19 @@ def pivot_calibration(pivot_data):
     # 2. Solving for the pivot point p using least squares
     # 3. Computing the residual error
     
-    positions = pivot_data.get('positions', [])
-    orientations = pivot_data.get('orientations', [])
+    tip_positions = pivot_data.get('tip_positions', [])
+    orient_frames = pivot_data.get('orient_frames', [])
     
-    if not positions or not orientations:
-        raise ValueError("Pivot data must contain both positions and orientations")
+    if not tip_positions or not orient_frames:
+        raise ValueError("Pivot data must contain both tip positions and orient frames")
     
-    # Placeholder implementation
-    pivot_point = np.zeros(3)
-    residual_error = 0.0
-    
+    # solve for the tip position and pivot point
+    p_list = [np.asarray(p, dtype=float) for p in tip_positions]
+    R_list = [np.asarray(R, dtype=float) for R in orient_frames]
+    tip_position, pivot_point, residual_error = solve_for_pivot(R_list, p_list)
+
     return {
+        'tip_position': tip_position,
         'pivot_point': pivot_point,
         'residual_error': residual_error
     }
@@ -58,19 +118,47 @@ def em_pivot_calibration(em_pivot_data):
         dict: Calibration results
     """
     # TODO: Implement EM pivot calibration
-    pass
+    frames = as_frames(em_pivot_data)
+    if len(frames) < 2:
+        raise ValueError("EM pivot data must contain at least 2 frames")
+    local_coord = first_frame_centroid(frames)
+    R_list, p_list = poses_from_frames(local_coord, frames)
+    tip_position, pivot_point, residual_error = solve_for_pivot(R_list, p_list)
+    return {
+        'tip_position': tip_position,
+        'pivot_point': pivot_point,
+        'residual_error': residual_error
+    }
 
 
-def opt_pivot_calibration(opt_pivot_data, cal_body_data):
+def opt_pivot_calibration(opt_pivot_data):
     """
     Perform optical pivot calibration.
     
     Args:
         opt_pivot_data (np.ndarray): Optical pivot calibration data
-        cal_body_data (np.ndarray): Calibration body data
-        
     Returns:
         dict: Calibration results
     """
-    # TODO: Implement optical pivot calibration
-    pass
+    # normalize input into a list of (N_H,3) arrays named H_frames
+    if isinstance(opt_pivot_data, dict) and "frames" in opt_pivot_data:
+        H_frames = []
+        for fr in opt_pivot_data["frames"]:
+            if isinstance(fr, dict) and "h_points" in fr:
+                H_frames.append(np.asarray(fr["h_points"], dtype=float))
+            else:
+                H_frames.append(np.asarray(fr, dtype=float))
+    else:
+        H_frames = as_frames(opt_pivot_data)
+
+    if len(H_frames) < 2:
+        raise ValueError("Need at least two frames for pivot calibration.")
+    local_coord = first_frame_centroid(H_frames)
+    R_list, p_list = poses_from_frames(local_coord, H_frames)
+    tip_position, pivot_point, residual_error = solve_for_pivot(R_list, p_list)
+
+    return {
+        'tip_position': tip_position,
+        'pivot_point': pivot_point,
+        'residual_error': residual_error
+    }

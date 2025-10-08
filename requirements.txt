@@ -1,7 +1,7 @@
 black
 flake8
 pytest
-pandas
 numpy
+scipy
 click
 rich

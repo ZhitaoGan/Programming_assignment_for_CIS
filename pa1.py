@@ -92,23 +92,23 @@ def main(data_dir, output_dir, name, name_2, name_3, name_4, output_file, output
     if not output_file1 and not output_file2 and not \
         input_reg and name and name_2 and (not input_reg or not input_reg2):
         try:
-            utility_functions.parse_files(output_file, cal_read, cal_body)
+            utility_functions.parse_files(output_file, cal_read, cal_body, str(output_dir))
         except BaseException as err:
             log.error(f"Unexpected {err=}, {type(err)=}")
             raise
     elif input_reg and input_reg2:
     #python pa1.py --name pa1-debug-b-calbody --input_reg Fa_b_registration --input_reg2 Fd_b_registration --output_file pa1-debug-b-output1
         try:
-            utility_functions.C_expected(cal_body, output_file, input_reg, input_reg2)
+            utility_functions.C_expected(cal_body, output_file, input_reg, input_reg2, str(output_dir))
         except BaseException as err:
-            log.error(f"Unexpected {err=}, {type(err)=}")
+            log.error(f"Unexpected {err=}, {type(err)=}",exc_info=True)
             raise
     #Question 5
     #To run:
     #python pa1.py --name_3 pa1-debug-a-empivot --output_file1 A_EM_pivot
     elif em_path and output_file1:
         try:
-            utility_functions.em_pivot(empivot, output_file1)
+            utility_functions.em_pivot(empivot, output_file1, str(output_dir))
         except BaseException as err:
             log.error(f"Unexpected {err=}, {type(err)=}")
             raise
@@ -117,7 +117,7 @@ def main(data_dir, output_dir, name, name_2, name_3, name_4, output_file, output
     #python pa1.py --name pa1-debug-a-calbody --name_4 pa1-debug-a-optpivot --output_file2 A_Optpivot 
     elif opt_path and output_file2:
         try:
-            utility_functions.opt_pivot(optpivot, cal_body, output_file2)
+            utility_functions.opt_pivot(optpivot, cal_body, output_file2, str(output_dir))
         except BaseException as err:
             log.error(f"Unexpected {err=}, {type(err)=}")
             raise
