@@ -121,8 +121,8 @@ python pa1.py --name pa1-debug-a-calbody --input_reg Fa_a_registration --input_r
 
 | Problem | Description | Command |
 |---------|-------------|---------|
-| **4a** | Fa Frame Registration | `python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fa_a_registration --output_dir output` |
-| **4b** | Fd Frame Registration | `python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fd_a_registration --output_dir output` |
+| **4a** | Fd Frame Registration | `python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fd_a_registration --output_dir output` |
+| **4b** | Fa Frame Registration | `python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fa_a_registration --output_dir output` |
 | **5** | EM Pivot Calibration | `python pa1.py --name_3 pa1-debug-a-empivot --output_file1 A_EM_pivot --output_dir output` |
 | **6** | Optical Pivot Calibration | `python pa1.py --name pa1-debug-a-calbody --name_4 pa1-debug-a-optpivot --output_file2 A_Optpivot --output_dir output` |
 | **4c** | Expected C Coordinates | `python pa1.py --name pa1-debug-a-calbody --input_reg Fa_a_registration --input_reg2 Fd_a_registration --output_file pa1-debug-a-output1 --output_dir output` |

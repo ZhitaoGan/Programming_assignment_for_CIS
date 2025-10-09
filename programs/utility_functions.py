@@ -157,8 +157,8 @@ def parse_files(output_file, cal_read, cal_body, output_dir="."):
             F_A_list.append(T_A.flatten())
         
         # Save as separate .txt files
-        np.savetxt(f"{output_dir}/Fd_a_registration.txt", F_D_list, fmt="%.3f", delimiter=",")
-        np.savetxt(f"{output_dir}/Fa_a_registration.txt", F_A_list, fmt="%.3f", delimiter=",")
+        np.savetxt(f"{output_dir}/Fd_a_registration.txt", F_D_list, fmt="%.2f", delimiter=",")
+        np.savetxt(f"{output_dir}/Fa_a_registration.txt", F_A_list, fmt="%.2f", delimiter=",")
 
 
 def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="."):

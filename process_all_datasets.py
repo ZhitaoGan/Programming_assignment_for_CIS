@@ -77,16 +77,16 @@ def process_dataset(dataset_name, is_debug=True):
     success_count = 0
     total_operations = 0
     
-    # 1. Generate Fa registration
-    total_operations += 1
-    cmd = f"python pa1.py --data_dir '{data_dir}' --output_dir '{output_dir}' --name {dataset_name}-calbody --name_2 {dataset_name}-calreadings --output_file Fa_{dataset_name}_registration"
-    if run_command(cmd, f"Generate Fa registration for {dataset_name}"):
-        success_count += 1
-    
-    # 2. Generate Fd registration  
+    # 1. Generate Fd registration (4a: D to d points)
     total_operations += 1
     cmd = f"python pa1.py --data_dir '{data_dir}' --output_dir '{output_dir}' --name {dataset_name}-calbody --name_2 {dataset_name}-calreadings --output_file Fd_{dataset_name}_registration"
     if run_command(cmd, f"Generate Fd registration for {dataset_name}"):
+        success_count += 1
+    
+    # 2. Generate Fa registration (4b: A to a points)
+    total_operations += 1
+    cmd = f"python pa1.py --data_dir '{data_dir}' --output_dir '{output_dir}' --name {dataset_name}-calbody --name_2 {dataset_name}-calreadings --output_file Fa_{dataset_name}_registration"
+    if run_command(cmd, f"Generate Fa registration for {dataset_name}"):
         success_count += 1
     
     # 3. Generate EM pivot calibration
