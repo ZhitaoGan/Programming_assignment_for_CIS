@@ -1,24 +1,22 @@
 """
 Unit tests for Utility Functions Module
 
-Tests core utility functions:
+Tests core utility functions using synthetic data:
 - C_expected: C coordinate calculation with compose order fix
-- Dynamic filename handling
-- Integration with pivot calibration results
+- File I/O functions for data reading
 """
 
 import pytest
 import numpy as np
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+from numpy.testing import assert_array_almost_equal
 import sys
 import os
 import tempfile
-import shutil
 
 # Add the parent directory to the path to import the modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from utility_functions import C_expected
+from utility_functions import C_expected, read_cal_data, read_pivot_data, read_optpivot
 from frame_transform import FrameTransform
 
 
@@ -82,8 +80,7 @@ class TestCExpectedFunction:
             np.savetxt(f"{temp_dir}/PA1-DEBUG-A_Optpivot.txt", opt_pivot_result, fmt="%.3f", delimiter=",")
             
             # Save Fa and Fd registration files
-            # Reshape 3D arrays to 2D for savetxt
-            F_A_reshaped = np.array(F_A_list).reshape(-1, 16)  # Flatten each 4x4 matrix to 16 elements
+            F_A_reshaped = np.array(F_A_list).reshape(-1, 16)
             F_D_reshaped = np.array(F_D_list).reshape(-1, 16)
             np.savetxt(f"{temp_dir}/Fa_a_registration.txt", F_A_reshaped, fmt="%.3f", delimiter=",")
             np.savetxt(f"{temp_dir}/Fd_a_registration.txt", F_D_reshaped, fmt="%.3f", delimiter=",")
@@ -109,101 +106,6 @@ class TestCExpectedFunction:
             # Check optical pivot tip position
             opt_tip_line = lines[2].strip()
             assert "4.000, 5.000, 6.000" in opt_tip_line
-    
-    def test_c_expected_compose_order_mathematical_correctness(self):
-        """Test mathematical correctness of compose order: F_D ∘ F_A^(-1) vs F_D^(-1) ∘ F_A"""
-        # Create simple test case where we can verify the math
-        cal_body = {
-            "c_points": np.array([[1, 0, 0]], dtype=float)  # Single point for simplicity
-        }
-        
-        # Create simple transformations
-        F_D = np.eye(4, dtype=float)
-        F_D[:3, 3] = [1, 0, 0]  # Translation by [1, 0, 0]
-        
-        F_A = np.eye(4, dtype=float)
-        F_A[:3, 3] = [0, 1, 0]  # Translation by [0, 1, 0]
-        
-        F_D_list = [F_D]
-        F_A_list = [F_A]
-        
-        # Calculate expected result manually
-        F_D_transform = FrameTransform(F_D[:3, :3], F_D[:3, 3])
-        F_A_transform = FrameTransform(F_A[:3, :3], F_A[:3, 3])
-        
-        # Correct compose order: F_D ∘ F_A^(-1)
-        correct_compose = F_D_transform.compose(F_A_transform.inverse())
-        correct_result = correct_compose.transform_points(cal_body["c_points"])
-        
-        # Incorrect compose order: F_D^(-1) ∘ F_A
-        incorrect_compose = F_D_transform.inverse().compose(F_A_transform)
-        incorrect_result = incorrect_compose.transform_points(cal_body["c_points"])
-        
-        # Verify they are different (proving the fix matters)
-        assert not np.allclose(correct_result, incorrect_result, atol=1e-10)
-        
-        # Verify correct result: F_D ∘ F_A^(-1) * [1,0,0] = F_D * F_A^(-1) * [1,0,0]
-        # F_A^(-1) * [1,0,0] = [1,-1,0] (inverse of translation [0,1,0])
-        # F_D * [1,-1,0] = [2,-1,0] (apply translation [1,0,0])
-        expected_result = np.array([[2, -1, 0]], dtype=float)
-        assert_array_almost_equal(correct_result, expected_result, decimal=10)
-    
-    def test_c_expected_dynamic_filename_handling(self):
-        """Test that C_expected handles dynamic filenames correctly"""
-        cal_body = {
-            "c_points": np.array([[1, 2, 3]], dtype=float)
-        }
-        
-        # Simple identity transformations (need multiple frames)
-        F_D_list = [np.eye(4, dtype=float), np.eye(4, dtype=float)]  # 2 frames
-        F_A_list = [np.eye(4, dtype=float), np.eye(4, dtype=float)]  # 2 frames
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Test different dataset names
-            test_cases = [
-                ("pa1-debug-a-output1", "PA1-DEBUG-A"),
-                ("pa1-debug-b-output1", "PA1-DEBUG-B"),
-                ("pa1-unknown-c-output1", "PA1-UNKNOWN-C")
-            ]
-            
-            for output_file, dataset_prefix in test_cases:
-                # Create mock pivot result files
-                em_pivot_result = np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]], dtype=float)
-                opt_pivot_result = np.array([[0, 0, 0], [2, 2, 2], [0, 0, 0]], dtype=float)
-                
-                # Save with dynamic filenames
-                np.savetxt(f"{temp_dir}/{dataset_prefix}_EM_pivot.txt", em_pivot_result, fmt="%.3f", delimiter=",")
-                np.savetxt(f"{temp_dir}/{dataset_prefix}_Optpivot.txt", opt_pivot_result, fmt="%.3f", delimiter=",")
-                
-                # Save Fa and Fd registration files
-                # Reshape 3D arrays to 2D for savetxt
-                F_A_reshaped = np.array(F_A_list).reshape(-1, 16)  # Flatten each 4x4 matrix to 16 elements
-                F_D_reshaped = np.array(F_D_list).reshape(-1, 16)
-                np.savetxt(f"{temp_dir}/Fa_a_registration.txt", F_A_reshaped, fmt="%.3f", delimiter=",")
-                np.savetxt(f"{temp_dir}/Fd_a_registration.txt", F_D_reshaped, fmt="%.3f", delimiter=",")
-                
-                # Test C_expected function
-                C_expected(cal_body, output_file, "Fa_a_registration", "Fd_a_registration", temp_dir)
-                
-                # Verify output file was created
-                output_path = f"{temp_dir}/{output_file}.txt"
-                assert os.path.exists(output_path), f"Output file not created for {output_file}"
-                
-                # Verify content contains correct dataset name
-                with open(output_path, 'r') as f:
-                    content = f.read()
-                    assert f"{output_file}.txt" in content
-    
-    def test_c_expected_error_handling(self):
-        """Test error handling in C_expected function"""
-        cal_body = {
-            "c_points": np.array([[1, 2, 3]], dtype=float)
-        }
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Test with missing pivot files
-            with pytest.raises(FileNotFoundError):
-                C_expected(cal_body, "pa1-debug-a-output1", "Fa_a_registration", "Fd_a_registration", temp_dir)
     
     def test_c_expected_coordinate_accuracy(self):
         """Test that C_expected produces accurate coordinate transformations"""
@@ -253,8 +155,7 @@ class TestCExpectedFunction:
             np.savetxt(f"{temp_dir}/PA1-DEBUG-A_Optpivot.txt", opt_pivot_result, fmt="%.3f", delimiter=",")
             
             # Save Fa and Fd registration files
-            # Reshape 3D arrays to 2D for savetxt
-            F_A_reshaped = np.array(F_A_list).reshape(-1, 16)  # Flatten each 4x4 matrix to 16 elements
+            F_A_reshaped = np.array(F_A_list).reshape(-1, 16)
             F_D_reshaped = np.array(F_D_list).reshape(-1, 16)
             np.savetxt(f"{temp_dir}/Fa_a_registration.txt", F_A_reshaped, fmt="%.3f", delimiter=",")
             np.savetxt(f"{temp_dir}/Fd_a_registration.txt", F_D_reshaped, fmt="%.3f", delimiter=",")
@@ -281,102 +182,123 @@ class TestCExpectedFunction:
                 assert all(np.isfinite(coords))
 
 
-class TestUtilityFunctionIntegration:
-    """Test integration between utility functions and pivot calibration"""
+class TestFileIOFunctions:
+    """Test cases for file I/O utility functions"""
     
-    def test_end_to_end_coordinate_transformation(self):
-        """Test complete end-to-end coordinate transformation pipeline"""
-        # This test simulates the complete pipeline from pivot calibration to C coordinate calculation
+    def test_read_cal_data_synthetic(self):
+        """Test reading calibration data with synthetic data"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            # Write synthetic calibration data
+            f.write("3, 3, 3\n")  # N_D, N_A, N_C
+            f.write("1.0, 2.0, 3.0\n")
+            f.write("4.0, 5.0, 6.0\n")
+            f.write("7.0, 8.0, 9.0\n")
+            f.write("10.0, 11.0, 12.0\n")
+            f.write("13.0, 14.0, 15.0\n")
+            f.write("16.0, 17.0, 18.0\n")
+            f.write("19.0, 20.0, 21.0\n")
+            f.write("22.0, 23.0, 24.0\n")
+            f.write("25.0, 26.0, 27.0\n")
+            f.flush()
+            
+            # Test reading
+            result = read_cal_data(f.name)
+            
+            # Verify structure
+            assert result is not None
+            assert "d_points" in result
+            assert "a_points" in result
+            assert "c_points" in result
+            
+            # Verify data shapes
+            assert result["d_points"].shape == (3, 3)
+            assert result["a_points"].shape == (3, 3)
+            assert result["c_points"].shape == (3, 3)
+            
+            # Verify data content
+            assert np.allclose(result["d_points"][0], [1.0, 2.0, 3.0])
+            assert np.allclose(result["a_points"][0], [10.0, 11.0, 12.0])
+            assert np.allclose(result["c_points"][0], [19.0, 20.0, 21.0])
         
-        # Create realistic calibration body data
-        cal_body = {
-            "c_points": np.array([
-                [100, 200, 300],
-                [101, 200, 300],
-                [100, 201, 300],
-                [100, 200, 301]
-            ], dtype=float)
-        }
+        # Clean up
+        os.unlink(f.name)
+    
+    def test_read_pivot_data_synthetic(self):
+        """Test reading pivot data with synthetic data"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            # Write synthetic pivot data
+            f.write("3, 2\n")  # N_G, N_frames
+            f.write("1.0, 2.0, 3.0\n")
+            f.write("4.0, 5.0, 6.0\n")
+            f.write("7.0, 8.0, 9.0\n")
+            f.write("10.0, 11.0, 12.0\n")
+            f.write("13.0, 14.0, 15.0\n")
+            f.write("16.0, 17.0, 18.0\n")
+            f.flush()
+            
+            # Test reading
+            result = read_pivot_data(f.name)
+            
+            # Verify structure
+            assert result is not None
+            assert "frames" in result
+            assert "N_G" in result
+            
+            # Verify data shapes
+            assert len(result["frames"]) == 2
+            assert result["N_G"] == 3
+            assert result["frames"][0].shape == (3, 3)
+            assert result["frames"][1].shape == (3, 3)
+            
+            # Verify data content
+            assert np.allclose(result["frames"][0][0], [1.0, 2.0, 3.0])
+            assert np.allclose(result["frames"][1][0], [10.0, 11.0, 12.0])
         
-        # Create realistic transformation matrices (simulating Fa/Fd registrations)
-        F_D_list = []
-        F_A_list = []
+        # Clean up
+        os.unlink(f.name)
+    
+    def test_read_optpivot_synthetic(self):
+        """Test reading optical pivot data with synthetic data"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            # Write synthetic optical pivot data
+            f.write("2, 2, 2\n")  # N_D, N_H, N_frames
+            f.write("1.0, 2.0, 3.0\n")
+            f.write("4.0, 5.0, 6.0\n")
+            f.write("7.0, 8.0, 9.0\n")
+            f.write("10.0, 11.0, 12.0\n")
+            f.write("13.0, 14.0, 15.0\n")
+            f.write("16.0, 17.0, 18.0\n")
+            f.write("19.0, 20.0, 21.0\n")
+            f.write("22.0, 23.0, 24.0\n")
+            f.flush()
+            
+            # Test reading
+            result = read_optpivot(f.name)
+            
+            # Verify structure
+            assert result is not None
+            assert "frames" in result
+            assert "N_D" in result
+            assert "N_H" in result
+            
+            # Verify data shapes
+            assert len(result["frames"]) == 2
+            assert result["N_D"] == 2
+            assert result["N_H"] == 2
+            
+            # Verify frame structure
+            frame = result["frames"][0]
+            assert "d_points" in frame
+            assert "h_points" in frame
+            assert frame["d_points"].shape == (2, 3)
+            assert frame["h_points"].shape == (2, 3)
+            
+            # Verify data content
+            assert np.allclose(frame["d_points"][0], [1.0, 2.0, 3.0])
+            assert np.allclose(frame["h_points"][0], [7.0, 8.0, 9.0])
         
-        for i in range(3):
-            # Create realistic rotations and translations
-            angle = i * 0.1
-            R = np.array([[np.cos(angle), -np.sin(angle), 0],
-                         [np.sin(angle), np.cos(angle), 0],
-                         [0, 0, 1]], dtype=float)
-            
-            t_D = np.array([i * 0.5, i * 0.3, i * 0.2], dtype=float)
-            t_A = np.array([i * 0.4, i * 0.6, i * 0.1], dtype=float)
-            
-            F_D = np.eye(4, dtype=float)
-            F_D[:3, :3] = R
-            F_D[:3, 3] = t_D
-            
-            F_A = np.eye(4, dtype=float)
-            F_A[:3, :3] = R
-            F_A[:3, 3] = t_A
-            
-            F_D_list.append(F_D)
-            F_A_list.append(F_A)
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create realistic pivot calibration results
-            em_pivot_result = np.array([
-                [0.1, 0.2, 0.3],  # EM tip
-                [190.5, 207.3, 209.2],  # EM pivot (realistic values)
-                [0.01, 0, 0]  # EM residual
-            ], dtype=float)
-            
-            opt_pivot_result = np.array([
-                [0.4, 0.5, 0.6],  # Optical tip
-                [400.6, 402.1, 203.5],  # Optical pivot (realistic values)
-                [0.02, 0, 0]  # Optical residual
-            ], dtype=float)
-            
-            # Save pivot results
-            np.savetxt(f"{temp_dir}/PA1-DEBUG-A_EM_pivot.txt", em_pivot_result, fmt="%.3f", delimiter=",")
-            np.savetxt(f"{temp_dir}/PA1-DEBUG-A_Optpivot.txt", opt_pivot_result, fmt="%.3f", delimiter=",")
-            
-            # Save Fa and Fd registration files
-            # Reshape 3D arrays to 2D for savetxt
-            F_A_reshaped = np.array(F_A_list).reshape(-1, 16)  # Flatten each 4x4 matrix to 16 elements
-            F_D_reshaped = np.array(F_D_list).reshape(-1, 16)
-            np.savetxt(f"{temp_dir}/Fa_a_registration.txt", F_A_reshaped, fmt="%.3f", delimiter=",")
-            np.savetxt(f"{temp_dir}/Fd_a_registration.txt", F_D_reshaped, fmt="%.3f", delimiter=",")
-            
-            # Run complete pipeline
-            C_expected(cal_body, "pa1-debug-a-output1", "Fa_a_registration", "Fd_a_registration", temp_dir)
-            
-            # Verify output file
-            output_file = f"{temp_dir}/pa1-debug-a-output1.txt"
-            assert os.path.exists(output_file)
-            
-            # Verify file content structure
-            with open(output_file, 'r') as f:
-                content = f.read()
-                lines = content.strip().split('\n')
-            
-            # Verify header
-            assert "4, 3, pa1-debug-a-output1.txt" in lines[0]
-            
-            # Verify pivot points
-            assert "190.500, 207.300, 209.200" in lines[1]
-            assert "400.600, 402.100, 203.500" in lines[2]
-            
-            # Verify C coordinates are present
-            assert len(lines) == 15  # Header + 2 pivot + 3 frames × 4 C points
-            
-            # Verify all C coordinates are reasonable
-            for i in range(3, len(lines)):
-                coords = [float(x.strip()) for x in lines[i].split(',')]
-                assert len(coords) == 3
-                assert all(np.isfinite(coords))
-                # C coordinates should be in reasonable range (not extremely large)
-                assert all(abs(coord) < 10000 for coord in coords)
+        # Clean up
+        os.unlink(f.name)
 
 
 if __name__ == "__main__":

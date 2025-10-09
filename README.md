@@ -30,10 +30,10 @@ If you use this template or any of the code within for your project, please cite
 ## Project Status
 
 **Current Results (as of latest run):**
-- ✅ **Program Execution**: 100% success rate (51/51 operations completed)
-- ✅ **Pivot Calibration**: 100% accuracy (7/7 debug datasets within tolerance)
-- ⚠️ **Complete Files**: Some differences in C coordinates (expected due to known calculation issues)
-- 📊 **Generated Files**: 47 output files covering all 11 datasets (7 debug + 4 unknown)
+- **Program Execution**: 100% success rate (51/51 operations completed)
+- **Pivot Calibration**: 100% accuracy (7/7 debug datasets within tolerance)
+- **Complete Files**: Some differences in C coordinates (expected due to known calculation issues)
+- **Generated Files**: 47 output files covering all 11 datasets (7 debug + 4 unknown)
 
 **Key Features:**
 - Comprehensive batch processing for all datasets
@@ -221,16 +221,61 @@ python compare_outputs.py --help
 
 ## Testing
 
-Use [pytest](https://docs.pytest.org/en/6.2.x/). In the `tests/` directory, place `.py` files that start with `test_`, and contain functions that start with `test_`. Then use `assert` statements to evaluate parts of your code.
+The project includes comprehensive unit tests focused on validating core algorithms using synthetic data
 
-Run all tests with:
+### Test Structure
+
+The test suite is organized into three main modules, each focusing on specific core algorithms:
+
+#### 1. **Pivot Calibration Tests** (`programs/tests/test_pivot_calibration.py`)
+Tests the core pivot calibration algorithms:
+- **`solve_for_pivot`**: Core least squares algorithm with ground truth validation and noise robustness
+- **`em_pivot_calibration`**: EM pivot calibration with synthetic data
+- **`opt_pivot_calibration`**: Optical pivot calibration with synthetic data
+
+#### 2. **Frame Transform Tests** (`programs/tests/test_frame_transform.py`)
+Tests coordinate frame transformation algorithms:
+- **`Point_set_registration`**: SVD-based least squares registration with ground truth validation
+- **Basic transformation operations**: `transform_points`, `inverse`, `compose`
+- **Orthonormality validation**: Ensures rotation matrices maintain proper mathematical properties
+
+#### 3. **Utility Functions Tests** (`programs/tests/test_utility_functions.py`)
+Tests core utility functions:
+- **`C_expected`**: C coordinate calculation with compose order fix
+- **File I/O functions**: `read_cal_data`, `read_pivot_data`, `read_optpivot`
+
+### Running Tests
+
+**Run all tests:**
 ```bash
-pytest -s
+pytest programs/tests/ -v
 ```
 
-Or focus on a particular test:
+**Run specific test modules:**
 ```bash
-pytest -s tests/test_frame.py::test_registration
+# Test pivot calibration algorithms
+pytest programs/tests/test_pivot_calibration.py -v
+
+# Test frame transformation algorithms  
+pytest programs/tests/test_frame_transform.py -v
+
+# Test utility functions
+pytest programs/tests/test_utility_functions.py -v
 ```
 
-The `-s` option tells pytest to allow `print` statements and other logging to be passed through.
+**Run individual test functions:**
+```bash
+# Test specific algorithm
+pytest programs/tests/test_pivot_calibration.py::TestSolveForPivot::test_solve_for_pivot_ground_truth_validation -v
+
+# Test with verbose output
+pytest programs/tests/ -v -s
+```
+
+
+### Test Results
+
+- **Total Tests**: 21 focused unit tests
+- **Execution Time**: ~0.1 seconds
+- **Coverage**: Core algorithms (pivot calibration, point set registration, coordinate transforms)
+- **Validation**: Ground truth recovery with synthetic data

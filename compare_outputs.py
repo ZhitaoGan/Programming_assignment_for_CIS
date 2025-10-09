@@ -38,10 +38,10 @@ def compare_output_files(generated_file, expected_file, tolerance=0.1):
         print(f"  Tolerance: {tolerance}")
         
         if max_diff <= tolerance:
-            print(f"  ✅ Files match within tolerance")
+            print(f" Files match within tolerance")
             return True
         else:
-            print(f"  ❌ Files differ beyond tolerance")
+            print(f" Files differ beyond tolerance")
             return False
             
     except Exception as e:
@@ -89,10 +89,10 @@ def compare_pivot_points_only(generated_file, expected_file, tolerance=0.05):
         opt_match = opt_max_diff <= tolerance
         
         if em_match and opt_match:
-            print(f"  ✅ Both pivot points match within tolerance ({tolerance})")
+            print(f" Both pivot points match within tolerance ({tolerance})")
             return True
         else:
-            print(f"  ❌ Pivot points differ beyond tolerance ({tolerance})")
+            print(f" Pivot points differ beyond tolerance ({tolerance})")
             return False
             
     except Exception as e:
