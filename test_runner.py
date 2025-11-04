@@ -36,6 +36,7 @@ def main():
         print("  all         - Run all tests")
         print("  frame       - Run frame transform tests")
         print("  pivot       - Run pivot calibration tests")
+        print("  distortion  - Run distortion correction tests")
         return
 
     command = sys.argv[1].lower()
@@ -46,6 +47,8 @@ def main():
         exit_code = run_specific_module("frame_transform")
     elif command == "pivot":
         exit_code = run_specific_module("pivot_calibration")
+    elif command == "distortion":
+        exit_code = run_specific_module("distortion_correction")
     else:
         print(f"Unknown command: {command}")
         exit_code = 1

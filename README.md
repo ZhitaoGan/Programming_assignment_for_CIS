@@ -74,7 +74,7 @@ This generates:
 
 ```bash
 # Run all tests
-pytest programs/tests/ -v
+python test_runner.py all
 ```
 
 
@@ -207,11 +207,11 @@ The test suite validates core algorithms using synthetic data with known ground 
 **Run PA1 tests:**
 ```bash
 # All PA1 tests
-pytest programs/tests/test_frame_transform.py programs/tests/test_pivot_calibration.py -v
+python test_runner.py frame
+python test_runner.py pivot
 
-# Specific PA1 module
-pytest programs/tests/test_frame_transform.py -v
-pytest programs/tests/test_pivot_calibration.py -v
+# Or run both together
+python test_runner.py all
 ```
 
 ### PA2 Tests
@@ -228,18 +228,21 @@ pytest programs/tests/test_pivot_calibration.py -v
 **Run PA2 tests:**
 ```bash
 # All PA2 tests
-pytest programs/tests/test_distortion_correction.py -v
+python test_runner.py distortion
 ```
 
 ### Run All Tests
 
 ```bash
 # All tests (PA1 + PA2)
-pytest programs/tests/ -v
-
-# With detailed output
-pytest programs/tests/ -v -s
+python test_runner.py all
 ```
+
+**Available test commands:**
+- `python test_runner.py all` - Run all tests
+- `python test_runner.py frame` - Run frame transform tests (PA1)
+- `python test_runner.py pivot` - Run pivot calibration tests (PA1)
+- `python test_runner.py distortion` - Run distortion correction tests (PA2)
 
 ## Algorithm Details
 
