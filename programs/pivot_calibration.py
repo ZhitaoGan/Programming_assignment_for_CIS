@@ -64,48 +64,12 @@ def solve_for_pivot(R_list, p_list):
     p_tip = x[:3]
     p_pivot = x[3:]
 
-    # residual error
-    residual_error = np.linalg.norm(R_stack @ x - p_stack)
+    # Calculate RMS residual error
+    residual_vector = R_stack @ x - p_stack
+    # Reshape to (num_frames, 3) and compute RMS per frame
+    residual_per_frame = residual_vector.reshape(-1, 3)
+    residual_error = np.sqrt(np.mean(np.sum(residual_per_frame**2, axis=1)))
     return p_tip, p_pivot, residual_error
-
-def pivot_calibration(pivot_data):
-    """
-    Perform pivot calibration using the least squares method
-    
-    Args:
-        pivot_data (dict): Dictionary containing pivot calibration data
-            - 'tip_positions': List of tool tip positions (Nx3 array)
-            - 'orient_frames': List of tool orientations (Nx3x3 array)
-    
-    Returns:
-        dict: Dictionary containing calibration results
-            - 'tip_position': 3x1 array representing the tip position
-            - 'pivot_point': 3x1 array representing the pivot point
-            - 'residual_error': Scalar representing the residual error
-    """
-    # TODO: Implement pivot calibration algorithm
-    # This typically involves:
-    # 1. Setting up the system of equations: R_i * p + t_i = d_i
-    # 2. Solving for the pivot point p using least squares
-    # 3. Computing the residual error
-    
-    tip_positions = pivot_data.get('tip_positions', [])
-    orient_frames = pivot_data.get('orient_frames', [])
-    
-    if not tip_positions or not orient_frames:
-        raise ValueError("Pivot data must contain both tip positions and orient frames")
-    
-    # solve for the tip position and pivot point
-    p_list = [np.asarray(p, dtype=float) for p in tip_positions]
-    R_list = [np.asarray(R, dtype=float) for R in orient_frames]
-    tip_position, pivot_point, residual_error = solve_for_pivot(R_list, p_list)
-
-    return {
-        'tip_position': tip_position,
-        'pivot_point': pivot_point,
-        'residual_error': residual_error
-    }
-
 
 def em_pivot_calibration(em_pivot_data):
     """
@@ -117,7 +81,6 @@ def em_pivot_calibration(em_pivot_data):
     Returns:
         dict: Calibration results
     """
-    # TODO: Implement EM pivot calibration
     frames = as_frames(em_pivot_data)
     if len(frames) < 2:
         raise ValueError("EM pivot data must contain at least 2 frames")
@@ -131,81 +94,52 @@ def em_pivot_calibration(em_pivot_data):
     }
 
 
-def opt_pivot_calibration(opt_pivot_data, cal_body_data=None):
+def opt_pivot_calibration(opt_pivot_data, cal_body_data):
     """
     Optical pivot calibration with integrated optical→EM transformation.
-    
+
     This implementation follows the three-step process:
     1. Use EM-base geometry from CALBODY to estimate optical→EM transformation
     2. Transform probe points into EM coordinates per frame
-    3. Solve pivot least squares in EM coordinate system
-    
+    3. Solve pivot least squares in EM coordinate system using helper functions
+
     Args:
         opt_pivot_data: Dictionary with "frames" containing optical measurements
-        cal_body_data: Dictionary with "d_points" containing EM-base geometry
+        cal_body_data: Dictionary with "d_points" containing EM-base geometry (required)
     Returns:
-        tip_position (3,), pivot_point (3,), residual_error (float)
+        dict: Calibration results with tip_position, pivot_point, residual_error
     """
-    import numpy as np
-    from programs.frame_transform import FrameTransform
-
     frames = opt_pivot_data["frames"]
     assert len(frames) >= 2
-    
-    # Step 1: Get EM-base geometry from CALBODY
-    if cal_body_data is None:
-        # Fallback: use first frame as EM geometry (original approach)
-        d_em = np.asarray(frames[0]["d_points"], float)
-    else:
-        # Use actual EM-base geometry from calibration body
-        d_em = np.asarray(cal_body_data["d_points"], float)
-    
-    # Get probe local shape from first frame (zero-mean)
-    H0 = np.asarray(frames[0]["h_points"], float)
-    h_local = H0 - H0.mean(axis=0)   # Probe local marker shape
 
-    F_H_in_EM_list = []
+    # Step 1: Get EM-base geometry from CALBODY (required for optical→EM transformation)
+    d_em = np.asarray(cal_body_data["d_points"], float)
 
-    # Step 2: For each optical pivot frame
+    # Step 2: Define local probe coordinate system using helper function
+    # Extract h_points from frames to create probe frames
+    h_frames = [np.asarray(fr["h_points"], float) for fr in frames]
+    h_local = first_frame_centroid(h_frames)
+
+    # Step 3: Transform optical measurements to EM coordinates and compute poses
+    h_em_frames = []
     for fr in frames:
         D_optical = np.asarray(fr["d_points"], float)  # Optical measurements of EM-base markers
         H_optical = np.asarray(fr["h_points"], float)  # Optical measurements of probe markers
-        
+
         # Correspondence-based estimation: optical → EM
         # Use correspondences between optical D (measured) and EM D geometry (d_em)
         F_0_to_EM = FrameTransform.Point_set_registration(D_optical, d_em)
-        
+
         # Transform probe H optical points into EM coordinates
         H_em = F_0_to_EM.transform_points(H_optical)
-        
-        # Register probe local shape to H_em to get F_H_in_EM[k]
-        F_H_in_EM = FrameTransform.Point_set_registration(h_local, H_em)
-        F_H_in_EM_list.append(F_H_in_EM)
+        h_em_frames.append(H_em)
 
-    # Step 3: Stack and solve the pivot least squares
-    R_list = [T.rotation_matrix for T in F_H_in_EM_list]
-    p_list = [T.translation_vector for T in F_H_in_EM_list]
-
-    K = len(R_list)
-    A = np.zeros((3*K, 6))
-    b = np.zeros((3*K,))
-    I = np.eye(3)
-
-    for k, (Rk, pk) in enumerate(zip(R_list, p_list)):
-        A[3*k:3*k+3, :3] = Rk
-        A[3*k:3*k+3, 3:] = -I
-        b[3*k:3*k+3] = -pk
-
-    x, *_ = np.linalg.lstsq(A, b, rcond=None)
-    t_tip = x[:3]         # probe tip in probe frame
-    p_pivot_em = x[3:]    # pivot in EM-base frame
-
-    # Residual RMS
-    res = (A @ x - b).reshape(-1, 3)
-    rms = float(np.sqrt((res**2).sum(axis=1).mean()))
+    # Step 4: Use helper functions to compute poses and solve pivot calibration
+    R_list, p_list = poses_from_frames(h_local, h_em_frames)
+    tip_position, pivot_point, residual_error = solve_for_pivot(R_list, p_list)
 
     return {
-        "tip_position": t_tip,
-        "pivot_point": p_pivot_em,
-        "residual_error": rms,
+        "tip_position": tip_position,
+        "pivot_point": pivot_point,
+        "residual_error": residual_error,
     }

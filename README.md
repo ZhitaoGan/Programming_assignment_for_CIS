@@ -1,10 +1,161 @@
-# cispa
+# CISPA - Computer Integrated Surgery Programming Assignment 1
 
-Template for CIS I programming assignments at Johns Hopkins. [Here](https://ciis.lcsr.jhu.edu/doku.php?id=courses:455-655:455-655) is the course page.
+Implementation of calibration and tracking algorithms for optical and electromagnetic tracking systems.
 
-You may need to modify this README to contain the proper urls for your repository.
+## Overview
 
-If you use this template or any of the code within for your project, please cite
+This project implements core algorithms for surgical navigation systems:
+- **Point Set Registration**: SVD-based least squares algorithm for coordinate frame alignment
+- **EM Pivot Calibration**: Calibrate electromagnetic tracking probe tip position
+- **Optical Pivot Calibration**: Calibrate optical tracking probe using calibration body
+- **Frame Transformations**: Compute expected marker positions across coordinate systems
+
+## Quick Start
+
+### 1. Setup Environment
+
+```bash
+# Install dependencies
+conda env create -f environment.yml
+conda activate cispa
+```
+
+Note: The `logging/` and `output/` directories are included in the repository.
+
+### 2. Process All Datasets (Recommended)
+
+```bash
+# Process all 11 datasets (7 debug + 4 unknown)
+python process_all_datasets.py
+```
+
+This generates:
+- Frame registrations (Fa, Fd) for all datasets
+- EM and optical pivot calibrations
+- Final output files with expected C coordinates
+- Comparison with expected results for debug datasets
+
+**Expected Results**: 55/55 operations successful
+
+### 3. Run Tests
+
+```bash
+# Run all tests (12 tests, ~0.07s)
+pytest programs/tests/ -v
+```
+
+## Manual Processing (Individual Datasets)
+
+Process a single dataset step-by-step:
+
+```bash
+DATASET="pa1-debug-a"
+
+# 1. Generate frame registrations (4x4 transformation matrices)
+python pa1.py --name ${DATASET}-calbody --name_2 ${DATASET}-calreadings --output_file Fa_${DATASET}_registration
+python pa1.py --name ${DATASET}-calbody --name_2 ${DATASET}-calreadings --output_file Fd_${DATASET}_registration
+
+# 2. Perform pivot calibrations
+python pa1.py --name_3 ${DATASET}-empivot --output_file1 ${DATASET}_EM_pivot
+python pa1.py --name ${DATASET}-calbody --name_4 ${DATASET}-optpivot --output_file2 ${DATASET}_Optpivot
+
+# 3. Generate final output with expected C coordinates
+python pa1.py --name ${DATASET}-calbody --input_reg Fa_${DATASET}_registration --input_reg2 Fd_${DATASET}_registration --output_file ${DATASET}-output1
+```
+
+## Project Structure
+
+```
+.
+├── programs/
+│   ├── frame_transform.py        # Point set registration & transformations
+│   ├── pivot_calibration.py      # EM and optical pivot calibration
+│   ├── utility_functions.py      # File I/O and data processing
+│   └── tests/                    # Unit tests (12 tests)
+├── pa1.py                        # Main CLI interface
+├── process_all_datasets.py       # Batch processing script
+├── PA 1 Student Data/            # Input datasets (7 debug + 4 unknown)
+├── output/                       # Generated results (created automatically)
+└── logging/                      # Log files (created automatically)
+```
+
+## Input Data
+
+Input files are in `PA 1 Student Data/` directory:
+
+| File | Format | Description |
+|------|--------|-------------|
+| `*-calbody.txt` | `N_D, N_A, N_C` + coordinates | Calibration body marker positions |
+| `*-calreadings.txt` | `N_D, N_A, N_C, N_frames` + data | Multi-frame calibration readings |
+| `*-empivot.txt` | `N_G, N_frames` + data | EM probe marker data |
+| `*-optpivot.txt` | `N_D, N_H, N_frames` + data | Optical tracking data |
+
+All coordinates are in millimeters (mm).
+
+## Output Files
+
+Generated in `output/` directory:
+
+| File Type | Example | Description |
+|-----------|---------|-------------|
+| Frame registrations | `Fa_*_registration.txt`, `Fd_*_registration.txt` | 4x4 transformation matrices (flattened) |
+| Pivot calibrations | `*_EM_pivot.txt`, `*_Optpivot.txt` | Tip position, pivot point, residual error |
+| Final outputs | `*-output1.txt` | Complete results with C coordinates |
+
+**Pivot calibration output format:**
+```
+tip_x, tip_y, tip_z
+pivot_x, pivot_y, pivot_z
+residual_error, 0, 0
+```
+
+## Testing
+
+The test suite validates core algorithms using synthetic data with known ground truth:
+
+**Test Coverage (12 tests):**
+- Frame transformations (3 tests): transform, inverse, compose
+- Point set registration (5 tests): identity, translation, rotation, general, noise robustness
+- Pivot calibration (4 tests): least squares solver + EM/optical calibration with noise
+
+**Run tests:**
+```bash
+# All tests
+pytest programs/tests/ -v
+
+# Specific module
+pytest programs/tests/test_pivot_calibration.py -v
+pytest programs/tests/test_frame_transform.py -v
+
+# With detailed output
+pytest programs/tests/ -v -s
+```
+
+## Algorithm Details
+
+### Point Set Registration
+- **Method**: SVD-based closed-form least squares
+- **Input**: Two corresponding point sets (source, target)
+- **Output**: Rotation matrix R and translation vector t
+- **Equation**: `target = R @ source + t`
+
+### EM Pivot Calibration
+- **Method**: Least squares optimization
+- **Input**: Multiple frames of probe marker positions
+- **Output**: Tip position (probe frame), pivot point (EM frame), residual error
+- **Constraint**: Pivot point remains fixed across all poses
+
+### Optical Pivot Calibration
+- **Method**: Integrated calibration using EM geometry
+- **Input**: Optical tracker data + calibration body geometry
+- **Steps**: Register optical→EM, transform probe markers, solve pivot equation
+- **Output**: Tip position (probe frame), pivot point (EM frame), residual error
+
+## Citation
+
+Template for CIS I programming assignments at Johns Hopkins. [Course page](https://ciis.lcsr.jhu.edu/doku.php?id=courses:455-655:455-655).
+
+If you use this template or any of the code within for your project, please cite:
 
 ```bibtex
 @misc{benjamindkilleen2022Sep,
@@ -26,256 +177,3 @@ If you use this template or any of the code within for your project, please cite
   url          = {https://ciis.lcsr.jhu.edu/doku.php?id=courses:455-655:2025:fall-2025-schedule}
 }
 ```
-
-## Project Status
-
-**Current Results (as of latest run):**
-- **Program Execution**: 100% success rate (51/51 operations completed)
-- **Pivot Calibration**: 100% accuracy (7/7 debug datasets within tolerance)
-- **Complete Files**: Some differences in C coordinates (expected due to known calculation issues)
-- **Generated Files**: 47 output files covering all 11 datasets (7 debug + 4 unknown)
-
-**Key Features:**
-- Comprehensive batch processing for all datasets
-- Robust comparison tools with adjustable tolerance settings
-- Focus on pivot calibration accuracy (most critical metric)
-- Detailed error reporting and statistics
-- Consolidated comparison script (`compare_outputs.py`) with multiple analysis modes
-
-## Setup
-
-1. **Install Dependencies**: Create and activate the conda environment:
-   ```bash
-   cd cispa
-   conda env create -f environment.yml
-   conda activate cispa
-   
-   # Create necessary directories
-   mkdir -p logging
-   mkdir -p output
-   ```
-
-2. **Verify Installation**: Run the tests to ensure everything is working:
-   ```bash
-   pytest -s
-   ```
-
-## Quick Start
-
-### Batch Processing (Recommended)
-
-**Process All Student Datasets**
-```bash
-# Process all debug datasets (a-g) and unknown datasets (h-k)
-python process_all_datasets.py
-```
-
-This script will:
-- Generate Fa and Fd registrations for all datasets in PA 1 Student Data
-- Perform EM and optical pivot calibrations for all datasets
-- Generate final output1 files for debug datasets
-- Compare generated outputs with expected results for debug datasets
-- Provide a comprehensive summary of all operations
-
-**Validate Results**
-```bash
-# Compare generated outputs with expected outputs for debug datasets
-python compare_outputs.py
-
-# Compare only pivot points (most important for calibration accuracy)
-python compare_outputs.py --pivot-only
-
-# Show help and usage options
-python compare_outputs.py --help
-```
-
-### Individual Dataset Processing
-
-#### Complete Workflow (Problems 4a, 4b, 4c, 5, 6)
-
-**Step 1: Generate Frame Registrations (Problems 4a & 4b)**
-```bash
-# Generate Fa frame registration (A to a points)
-python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fa_a_registration --output_dir output
-
-# Generate Fd frame registration (D to d points)
-python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fd_a_registration --output_dir output
-```
-
-**Step 2: Perform Pivot Calibrations (Problems 5 & 6)**
-```bash
-# EM pivot calibration
-python pa1.py --name_3 pa1-debug-a-empivot --output_file1 A_EM_pivot --output_dir output
-
-# Optical pivot calibration
-python pa1.py --name pa1-debug-a-calbody --name_4 pa1-debug-a-optpivot --output_file2 A_Optpivot --output_dir output
-```
-
-**Step 3: Generate Expected C Coordinates (Problem 4c)**
-```bash
-# Generate NAME-OUTPUT1.TXT format file with expected C coordinates
-python pa1.py --name pa1-debug-a-calbody --input_reg Fa_a_registration --input_reg2 Fd_a_registration --output_file pa1-debug-a-output1 --output_dir output
-```
-
-#### Individual Problem Commands
-
-| Problem | Description | Command |
-|---------|-------------|---------|
-| **4a** | Fd Frame Registration | `python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fd_a_registration --output_dir output` |
-| **4b** | Fa Frame Registration | `python pa1.py --name pa1-debug-a-calbody --name_2 pa1-debug-a-calreadings --output_file Fa_a_registration --output_dir output` |
-| **5** | EM Pivot Calibration | `python pa1.py --name_3 pa1-debug-a-empivot --output_file1 A_EM_pivot --output_dir output` |
-| **6** | Optical Pivot Calibration | `python pa1.py --name pa1-debug-a-calbody --name_4 pa1-debug-a-optpivot --output_file2 A_Optpivot --output_dir output` |
-| **4c** | Expected C Coordinates | `python pa1.py --name pa1-debug-a-calbody --input_reg Fa_a_registration --input_reg2 Fd_a_registration --output_file pa1-debug-a-output1 --output_dir output` |
-
-**Note**: You may see error messages about missing optional files (`pa1-debug-b-empivot.txt`, `pa1-debug-g-optpivot.txt`). These are harmless and don't affect the main functionality.
-
-## Data Format
-
-### Input Files
-
-All input files use comma-separated values (CSV) format with the following structure:
-
-| File Type | Header Format | Description |
-|-----------|---------------|-------------|
-| **CALBODY.TXT** | `N_D, N_A, N_C, filename` | Calibration body marker coordinates |
-| **CALREADINGS.TXT** | `N_D, N_A, N_C, N_frames, filename` | Multi-frame calibration readings |
-| **EMPIVOT.TXT** | `N_G, N_frames, filename` | EM probe marker data |
-| **OPTPIVOT.TXT** | `N_D, N_H, N_frames, filename` | Optical tracking data |
-
-All coordinates are in millimeters (mm).
-
-### Sample Data
-
-Sample input data files are provided in the `PA1 Student Data/` directory:
-- `pa1-debug-a-CALBODY.TXT`
-- `pa1-debug-a-CALREADINGS.TXT` 
-- `pa1-debug-a-EMPIVOT.TXT`
-- `pa1-debug-a-OPTPIVOT.TXT`
-
-**Note**: The sample files use `.TXT` extension (uppercase), but the program accepts both `.txt` and `.TXT` extensions.
-
-## Output Files
-
-The program generates output files in the `output/` directory (created automatically if it doesn't exist):
-
-### Batch Processing Output Files
-
-When running `process_all_datasets.py`, the following files are generated:
-
-| File Type | Count | Naming Pattern | Description |
-|-----------|-------|----------------|-------------|
-| **Registration Files** | 22 | `Fa_pa1-{dataset}_registration.txt`<br>`Fd_pa1-{dataset}_registration.txt` | Frame registration matrices |
-| **EM Pivot Files** | 11 | `PA1-{DATASET}_EM_pivot.txt` | EM pivot calibration results |
-| **Optical Pivot Files** | 11 | `PA1-{DATASET}_Optpivot.txt` | Optical pivot calibration results |
-| **Final Output Files** | 7 | `pa1-debug-{letter}-output1.txt` | Complete output files (debug datasets only) |
-
-### Individual Processing Output Files
-
-When running individual commands with `pa1.py`:
-
-| File Type | Example Filename | Description |
-|-----------|------------------|-------------|
-| **Registration Files** | `Fa_a_registration.txt`<br>`Fd_a_registration.txt` | Frame registration matrices (4x4 transformation matrices flattened to 16 values per frame) |
-| **Pivot Calibration Files** | `A_EM_pivot.txt`<br>`A_Optpivot.txt` | Pivot calibration results (tip position, pivot point, residual error) |
-| **Final Output File** | `pa1-debug-a-output1.txt` | Complete output file following NAME-OUTPUT1.TXT specification |
-
-### Output File Format
-
-The final output file follows the exact NAME-OUTPUT1.TXT specification:
-```
-3, 5, pa1-debug-a-output1.txt
--8.000, -2.500, 0.000
--6.000, -2.250, 0.250
--15.050, -15.197, 14.909
-14.950, -15.287, 14.939
-0.040, 14.758, 14.924
-...
-```
-
-Where each frame contains N_C lines of C_x, C_y, C_z coordinates for the expected EM marker positions.
-
-## Validation and Comparison
-
-The `compare_outputs.py` script provides comprehensive validation of generated results:
-
-### Tolerance Settings
-- **Pivot Points**: 0.05 mm tolerance (most critical for calibration accuracy)
-- **Complete Files**: 0.1 mm tolerance (includes C coordinate transformations)
-
-### Comparison Results
-- **Pivot Calibration**: 100% accuracy (7/7 debug datasets within tolerance)
-- **Complete Files**: Some differences expected due to known calculation issues in C coordinates
-- **Focus**: Prioritizes pivot calibration accuracy as the most important metric
-
-### Usage Options
-```bash
-# Full comparison (pivot + complete files)
-python compare_outputs.py
-
-# Only pivot points comparison (recommended)
-python compare_outputs.py --pivot-only
-
-# Show help
-python compare_outputs.py --help
-```
-
-## Testing
-
-The project includes comprehensive unit tests focused on validating core algorithms using synthetic data
-
-### Test Structure
-
-The test suite is organized into three main modules, each focusing on specific core algorithms:
-
-#### 1. **Pivot Calibration Tests** (`programs/tests/test_pivot_calibration.py`)
-Tests the core pivot calibration algorithms:
-- **`solve_for_pivot`**: Core least squares algorithm with ground truth validation and noise robustness
-- **`em_pivot_calibration`**: EM pivot calibration with synthetic data
-- **`opt_pivot_calibration`**: Optical pivot calibration with synthetic data
-
-#### 2. **Frame Transform Tests** (`programs/tests/test_frame_transform.py`)
-Tests coordinate frame transformation algorithms:
-- **`Point_set_registration`**: SVD-based least squares registration with ground truth validation
-- **Basic transformation operations**: `transform_points`, `inverse`, `compose`
-- **Orthonormality validation**: Ensures rotation matrices maintain proper mathematical properties
-
-#### 3. **Utility Functions Tests** (`programs/tests/test_utility_functions.py`)
-Tests core utility functions:
-- **`C_expected`**: C coordinate calculation with compose order fix
-- **File I/O functions**: `read_cal_data`, `read_pivot_data`, `read_optpivot`
-
-### Running Tests
-
-**Run all tests:**
-```bash
-pytest programs/tests/ -v
-```
-
-**Run specific test modules:**
-```bash
-# Test pivot calibration algorithms
-pytest programs/tests/test_pivot_calibration.py -v
-
-# Test frame transformation algorithms  
-pytest programs/tests/test_frame_transform.py -v
-
-# Test utility functions
-pytest programs/tests/test_utility_functions.py -v
-```
-
-**Run individual test functions:**
-```bash
-# Test specific algorithm
-pytest programs/tests/test_pivot_calibration.py::TestSolveForPivot::test_solve_for_pivot_ground_truth_validation -v
-
-# Test with verbose output
-pytest programs/tests/ -v -s
-```
-
-
-### Test Results
-
-- **Total Tests**: 21 focused unit tests
-- **Execution Time**: ~0.1 seconds
-- **Coverage**: Core algorithms (pivot calibration, point set registration, coordinate transforms)
-- **Validation**: Ground truth recovery with synthetic data

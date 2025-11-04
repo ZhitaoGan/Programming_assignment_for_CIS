@@ -130,5 +130,7 @@ dmypy.json
 
 **.DS_Store
 # CISPA project specific
-output/
+output/*
+!output/.gitkeep
 logging/*.log
+!logging/.gitkeep

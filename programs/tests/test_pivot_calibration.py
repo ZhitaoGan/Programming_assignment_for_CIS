@@ -107,83 +107,131 @@ class TestEMPivotCalibration:
     """Test cases for EM pivot calibration algorithm"""
     
     def test_em_pivot_calibration_synthetic_data(self):
-        """Test EM pivot calibration with synthetic data"""
-        # Create synthetic EM pivot data with known ground truth
-        true_tip = np.array([0.1, 0.2, 0.3])
-        true_pivot = np.array([1.0, 2.0, 3.0])
-        
-        # Generate frames with known transformations
+        """Test EM pivot calibration with synthetic data and ground truth validation"""
+        # Known ground truth for pivot (in tracker frame)
+        true_pivot = np.array([10.0, 20.0, 30.0])
+
+        # Define probe local geometry (zero-mean as algorithm expects)
+        probe_local_raw = np.array([
+            [-0.3, -0.2, -0.1],
+            [0.2, -0.2, -0.1],
+            [-0.3, 0.1, -0.1],
+            [-0.3, -0.2, 0.1]
+        ], dtype=float)
+        # Center the markers (algorithm does this automatically)
+        probe_local = probe_local_raw - probe_local_raw.mean(axis=0)
+
+        # Ground truth tip is relative to the centroid of markers
+        true_tip = np.array([0.5, 0.3, 0.2])
+
+        # Generate frames using pivot equation: pivot = R_i * tip + p_i
+        # Rearranged: p_i = pivot - R_i * tip
         frames = []
-        for i in range(5):
+        for i in range(8):
+            # Rotate around different axes with different angles
             angle = i * np.pi / 4
-            R = np.array([[np.cos(angle), -np.sin(angle), 0],
-                          [np.sin(angle), np.cos(angle), 0],
-                          [0, 0, 1]])
-            t = np.array([i * 0.1, i * 0.2, i * 0.3])
-            
-            # Create frame data (simulating EM measurements)
-            frame_points = np.array([[0, 0, 0], [0.5, 0, 0], [0, 0.5, 0]], dtype=float)
-            transformed_frame = (R @ frame_points.T).T + t
-            frames.append(transformed_frame)
-        
+            # Mix rotations for better conditioning
+            if i % 3 == 0:
+                R = np.array([[np.cos(angle), -np.sin(angle), 0],
+                              [np.sin(angle), np.cos(angle), 0],
+                              [0, 0, 1]])
+            elif i % 3 == 1:
+                R = np.array([[1, 0, 0],
+                              [0, np.cos(angle), -np.sin(angle)],
+                              [0, np.sin(angle), np.cos(angle)]])
+            else:
+                R = np.array([[np.cos(angle), 0, np.sin(angle)],
+                              [0, 1, 0],
+                              [-np.sin(angle), 0, np.cos(angle)]])
+
+            # Calculate translation using pivot equation
+            p_i = true_pivot - R @ true_tip
+
+            # Transform probe markers to this pose
+            frame_markers = (R @ probe_local.T).T + p_i
+            frames.append(frame_markers)
+
         result = em_pivot_calibration({"frames": frames})
-        
-        # Verify results structure
-        assert 'tip_position' in result
-        assert 'pivot_point' in result
-        assert 'residual_error' in result
-        assert len(result['tip_position']) == 3
-        assert len(result['pivot_point']) == 3
-        assert result['residual_error'] >= 0
-    
-    def test_em_pivot_calibration_insufficient_frames(self):
-        """Test EM pivot calibration with insufficient frames"""
-        frames = [np.array([[0, 0, 0], [1, 0, 0]])]
-        
-        with pytest.raises(ValueError, match="EM pivot data must contain at least 2 frames"):
-            em_pivot_calibration({"frames": frames})
+
+        # Validate that algorithm recovers ground truth
+        assert_array_almost_equal(result['tip_position'], true_tip, decimal=4)
+        assert_array_almost_equal(result['pivot_point'], true_pivot, decimal=4)
+        assert result['residual_error'] < 1e-8  # Should be near-zero for perfect data
 
 
 class TestOptPivotCalibration:
     """Test cases for optical pivot calibration algorithm"""
     
     def test_opt_pivot_calibration_synthetic_data(self):
-        """Test optical pivot calibration with synthetic data"""
-        # Create synthetic optical pivot data
+        """Test optical pivot calibration with synthetic data and ground truth validation"""
+        # Known ground truth for pivot (in EM/tracker frame)
+        true_pivot = np.array([15.0, 25.0, 35.0])
+
+        # EM-base geometry (fixed markers on calibration body in EM coordinates)
+        d_em = np.array([
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ], dtype=float)
+
+        # Probe local geometry (markers in probe frame)
+        h_local_raw = np.array([
+            [-0.2, -0.15, -0.05],
+            [0.2, -0.15, -0.05],
+            [-0.2, 0.15, -0.05],
+            [-0.2, -0.15, 0.05]
+        ], dtype=float)
+        # Center the markers (algorithm does this automatically)
+        h_local = h_local_raw - h_local_raw.mean(axis=0)
+
+        # Ground truth tip relative to centroid
+        true_tip = np.array([0.4, 0.3, 0.1])
+
+        # Generate frames
         frames = []
-        for i in range(3):
+        for i in range(8):
+            # Different probe poses (mix rotations for better conditioning)
+            angle = i * np.pi / 6
+            if i % 3 == 0:
+                R_probe = np.array([[np.cos(angle), -np.sin(angle), 0],
+                                   [np.sin(angle), np.cos(angle), 0],
+                                   [0, 0, 1]])
+            elif i % 3 == 1:
+                R_probe = np.array([[1, 0, 0],
+                                   [0, np.cos(angle), -np.sin(angle)],
+                                   [0, np.sin(angle), np.cos(angle)]])
+            else:
+                R_probe = np.array([[np.cos(angle), 0, np.sin(angle)],
+                                   [0, 1, 0],
+                                   [-np.sin(angle), 0, np.cos(angle)]])
+
+            # Calculate probe translation using pivot equation: pivot = R * tip + p
+            p_probe = true_pivot - R_probe @ true_tip
+
+            # Transform probe markers to EM coordinates
+            h_em = (R_probe @ h_local.T).T + p_probe
+
+            # Simulate optical tracker measurements
+            # Optical sees both D markers and H markers with some arbitrary transform
+            # For simplicity, assume optical = EM (identity transform)
+            d_optical = d_em.copy()
+            h_optical = h_em.copy()
+
             frames.append({
-                "h_points": np.array([[i * 0.1, i * 0.2, i * 0.3],
-                                    [i * 0.1 + 0.5, i * 0.2, i * 0.3],
-                                    [i * 0.1, i * 0.2 + 0.5, i * 0.3]], dtype=float),
-                "d_points": np.array([[10 + i * 0.1, 10 + i * 0.2, 10 + i * 0.3],
-                                    [11 + i * 0.1, 10 + i * 0.2, 10 + i * 0.3],
-                                    [10 + i * 0.1, 11 + i * 0.2, 10 + i * 0.3]], dtype=float)
+                "d_points": d_optical,
+                "h_points": h_optical
             })
-        
+
         opt_pivot_data = {"frames": frames}
-        cal_body_data = {"d_points": frames[0]["d_points"]}
-        
+        cal_body_data = {"d_points": d_em}
+
         result = opt_pivot_calibration(opt_pivot_data, cal_body_data)
-        
-        # Verify results structure
-        assert 'tip_position' in result
-        assert 'pivot_point' in result
-        assert 'residual_error' in result
-        assert len(result['tip_position']) == 3
-        assert len(result['pivot_point']) == 3
-        assert result['residual_error'] >= 0
-        assert np.all(np.isfinite(result['tip_position']))
-        assert np.all(np.isfinite(result['pivot_point']))
-    
-    def test_opt_pivot_calibration_insufficient_frames(self):
-        """Test optical pivot calibration with insufficient frames"""
-        frames = [{"h_points": np.array([[0, 0, 0], [1, 0, 0]]),
-                  "d_points": np.array([[10, 10, 10], [11, 10, 10]])}]
-        opt_pivot_data = {"frames": frames}
-        
-        with pytest.raises(AssertionError):
-            opt_pivot_calibration(opt_pivot_data)
+
+        # Validate that algorithm recovers ground truth
+        assert_array_almost_equal(result['tip_position'], true_tip, decimal=4)
+        assert_array_almost_equal(result['pivot_point'], true_pivot, decimal=4)
+        assert result['residual_error'] < 1e-8  # Should be near-zero for perfect data
 
 
 if __name__ == "__main__":

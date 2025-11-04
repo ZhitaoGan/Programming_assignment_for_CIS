@@ -100,18 +100,25 @@ def read_optpivot(file_path):
         return None
 
 
-def parse_files(output_file, cal_read, cal_body, output_dir="."):
+def parse_files(output_file, cal_read, cal_body, output_dir="output"):
     """
     Parse calibration files and generate output.
-    
+
     Args:
-        output_file (str): Name of the output file
+        output_file (str): Name of the output file (must contain "Fa" or "Fd")
         cal_read (np.ndarray): Calibration readings data
         cal_body (np.ndarray): Calibration body data
         output_dir (str): Output directory path
+
+    Raises:
+        ValueError: If output_file doesn't contain "Fa" or "Fd"
     """
+    # Validate output_file format
+    if "Fa" not in output_file and "Fd" not in output_file:
+        raise ValueError(f"output_file must contain 'Fa' or 'Fd', got: {output_file}")
+
     N_frames = len(cal_read["frames"])
-    
+
     # Determine which registration to generate based on output filename
     if "Fa" in output_file:
         # Generate Fa registration (A to a points)
@@ -137,37 +144,15 @@ def parse_files(output_file, cal_read, cal_body, output_dir="."):
             T[:3, 3] = F_D.translation_vector
             F_list.append(T.flatten())  # Flatten to 1D for saving
         np.savetxt(f"{output_dir}/{output_file}.txt", F_list, fmt="%.3f", delimiter=",")
-    else:
-        # Default: generate both registrations
-        F_D_list, F_A_list = [], []
-        for frame in cal_read["frames"]:
-            D, A = frame["d_points"], frame["a_points"]
-            F_D = FrameTransform.Point_set_registration(D, cal_body["d_points"])
-            F_A = FrameTransform.Point_set_registration(A, cal_body["a_points"])
-            
-            # Extract transformation matrices
-            T_D = np.eye(4)
-            T_D[:3, :3] = F_D.rotation_matrix
-            T_D[:3, 3] = F_D.translation_vector
-            F_D_list.append(T_D.flatten())
-            
-            T_A = np.eye(4)
-            T_A[:3, :3] = F_A.rotation_matrix
-            T_A[:3, 3] = F_A.translation_vector
-            F_A_list.append(T_A.flatten())
-        
-        # Save as separate .txt files
-        np.savetxt(f"{output_dir}/Fd_a_registration.txt", F_D_list, fmt="%.2f", delimiter=",")
-        np.savetxt(f"{output_dir}/Fa_a_registration.txt", F_A_list, fmt="%.2f", delimiter=",")
 
 
-def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="."):
+def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="output"):
     """
     Calculate expected C values and generate NAME-OUTPUT1.TXT format file.
-    
+
     Args:
         cal_body (np.ndarray): Calibration body data
-        output_file (str): Name of the output file
+        output_file (str): Name of the output file (e.g., "pa1-debug-a-output1")
         input_Fa (str): Fa registration file
         input_Fd (str): Fd registration file
         output_dir (str): Output directory path
@@ -175,30 +160,24 @@ def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="."):
     # Load Fa registration matrices (from .txt file)
     F_A_matrices = np.loadtxt(f"{output_dir}/{input_Fa}.txt", delimiter=",")
     N_frames = F_A_matrices.shape[0]
-    
-    # Load Fd registration matrices (from .txt file)  
+
+    # Load Fd registration matrices (from .txt file)
     F_D_matrices = np.loadtxt(f"{output_dir}/{input_Fd}.txt", delimiter=",")
-    
+
     # Reshape matrices back to 4x4
     F_A_list = [F_A_matrices[i].reshape(4, 4) for i in range(N_frames)]
     F_D_list = [F_D_matrices[i].reshape(4, 4) for i in range(N_frames)]
-    
-    # Get EM and optical pivot tip positions (from previous calibration results)
-    # Extract dataset name from output_file (e.g., "pa1-debug-a-output1" -> "PA1-DEBUG-A")
-    dataset_name = output_file.replace("-output1", "").upper().replace("-", "-")
-    if dataset_name.startswith("PA1-DEBUG-"):
-        dataset_prefix = dataset_name
-    elif dataset_name.startswith("PA1-UNKNOWN-"):
-        dataset_prefix = dataset_name
-    else:
-        # Fallback for other naming conventions
-        dataset_prefix = f"PA1-DEBUG-{dataset_name[-1].upper()}"
-    
+
+    # Extract dataset name from output_file (e.g., "pa1-debug-a-output1" -> "pa1-debug-a")
+    dataset_prefix = output_file.replace("-output1", "")
+
+    # Load pivot calibration results
     em_pivot_result = np.loadtxt(f"{output_dir}/{dataset_prefix}_EM_pivot.txt", delimiter=",")
     opt_pivot_result = np.loadtxt(f"{output_dir}/{dataset_prefix}_Optpivot.txt", delimiter=",")
-    
-    em_tip = em_pivot_result[1]  # Second row is pivot point (actual tip position)
-    opt_tip = opt_pivot_result[1]  # Second row is pivot point (actual tip position)
+
+    # Row 1 is pivot point (in tracker/EM base coordinates)
+    em_pivot = em_pivot_result[1]
+    opt_pivot = opt_pivot_result[1]
     
     # Calculate expected C coordinates for each frame
     C_expected_all = []
@@ -217,21 +196,21 @@ def C_expected(cal_body, output_file, input_Fa, input_Fd, output_dir="."):
     with open(f"{output_dir}/{output_file}.txt", 'w') as f:
         # Header line
         f.write(f"{N_C}, {N_frames}, {output_file}.txt\n")
-        
-        # EM pivot tip position
-        f.write(f"{em_tip[0]:.3f}, {em_tip[1]:.3f}, {em_tip[2]:.3f}\n")
-        
-        # Optical pivot tip position  
-        f.write(f"{opt_tip[0]:.3f}, {opt_tip[1]:.3f}, {opt_tip[2]:.3f}\n")
-        
+
+        # EM pivot point
+        f.write(f"{em_pivot[0]:8.2f}, {em_pivot[1]:8.2f}, {em_pivot[2]:8.2f}\n")
+
+        # Optical pivot point
+        f.write(f"{opt_pivot[0]:8.2f}, {opt_pivot[1]:8.2f}, {opt_pivot[2]:8.2f}\n")
+
         # Expected C coordinates for each frame
         for frame_idx in range(N_frames):
             for marker_idx in range(N_C):
                 c_coords = C_expected_all[frame_idx][marker_idx]
-                f.write(f"{c_coords[0]:.3f}, {c_coords[1]:.3f}, {c_coords[2]:.3f}\n")
+                f.write(f"{c_coords[0]:8.2f}, {c_coords[1]:8.2f}, {c_coords[2]:8.2f}\n")
 
 
-def em_pivot(empivot, output_file1, output_dir="."):
+def em_pivot(empivot, output_file1, output_dir="output"):
     """
     Perform EM pivot calibration and save results.
     
@@ -249,7 +228,7 @@ def em_pivot(empivot, output_file1, output_dir="."):
     np.savetxt(f"{output_dir}/{output_file1}.txt", np.vstack([p_tip, p_pivot, [residual_error,0,0]]), fmt="%.3f", delimiter=",")
 
 
-def opt_pivot(optpivot, cal_body, output_file2, output_dir="."):
+def opt_pivot(optpivot, cal_body, output_file2, output_dir="output"):
     """
     Perform optical pivot calibration and save results.
     
