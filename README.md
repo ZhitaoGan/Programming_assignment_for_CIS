@@ -48,7 +48,6 @@ This generates:
 - `output/*_EM_pivot.txt`, `output/*_Optpivot.txt` - Pivot calibration results
 - `output/pa1-*-output1.txt` - Final results with expected C coordinates (11 datasets)
 
-**Expected Results**: 55/55 operations successful
 
 ### 3. Run Programming Assignment 2
 
@@ -70,8 +69,6 @@ This generates:
 - `output/pa2-*-output2.txt` - Final probe tip positions in CT coordinates (10 datasets)
 - `output/pa2-unknown-*-Fa.txt`, `output/pa2-unknown-*-Fd.txt` - Frame transformation matrices (unknown datasets only)
 - `output/pa2-unknown-*-EM_pivot.txt`, `output/pa2-unknown-*-Optpivot.txt` - Pivot calibration results (unknown datasets only)
-
-**Expected Results**: All debug datasets < 1.0 mm error (sub-millimeter precision, best result: 0.005 mm mean error for pa2-debug-d)
 
 ### 4. Run Tests
 
