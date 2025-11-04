@@ -1,14 +1,22 @@
-# CISPA - Computer Integrated Surgery Programming Assignment 1
+# CISPA - Computer Integrated Surgery Programming Assignments
 
-Implementation of calibration and tracking algorithms for optical and electromagnetic tracking systems.
+Implementation of calibration, tracking, and distortion correction algorithms for optical and electromagnetic tracking systems.
 
 ## Overview
 
 This project implements core algorithms for surgical navigation systems:
+
+### Programming Assignment 1 (PA1)
 - **Point Set Registration**: SVD-based least squares algorithm for coordinate frame alignment
 - **EM Pivot Calibration**: Calibrate electromagnetic tracking probe tip position
 - **Optical Pivot Calibration**: Calibrate optical tracking probe using calibration body
 - **Frame Transformations**: Compute expected marker positions across coordinate systems
+
+### Programming Assignment 2 (PA2)
+- **Distortion Correction**: 3D Bernstein polynomial-based correction for EM tracker distortion
+- **Corrected Pivot Calibration**: EM pivot calibration with distortion correction applied
+- **Fiducial Registration**: Compute EM→CT coordinate transformation using fiducials
+- **Surgical Navigation**: Track probe tip positions in CT image coordinates
 
 ## Quick Start
 
@@ -22,11 +30,11 @@ conda activate cispa
 
 Note: The `logging/` and `output/` directories are included in the repository.
 
-### 2. Process All Datasets (Recommended)
+### 2. Run Programming Assignment 1
 
 ```bash
-# Process all 11 datasets (7 debug + 4 unknown)
-python process_all_datasets.py
+# Process all PA1 datasets (7 debug + 4 unknown)
+python run_all_pa1.py
 ```
 
 This generates:
@@ -37,51 +45,76 @@ This generates:
 
 **Expected Results**: 55/55 operations successful
 
-### 3. Run Tests
+### 3. Run Programming Assignment 2
 
 ```bash
-# Run all tests (12 tests, ~0.07s)
+# Process all PA2 datasets (6 debug + 4 unknown)
+python run_all_pa2.py
+```
+
+This automatically:
+1. **Generates output1 files** for unknown datasets (debug datasets already have them)
+2. **Performs distortion correction** using 3D Bernstein polynomials (degree 5)
+3. **Calibrates EM probe** with distortion correction applied
+4. **Computes fiducial positions** in EM tracker coordinates
+5. **Registers EM→CT** using point set registration
+6. **Tracks navigation points** and outputs probe tip positions in CT coordinates
+
+**Output Files Generated:**
+- `output/*-output1.txt` - Distortion calibration data (4 unknown datasets)
+- `output/*-output2.txt` - Final probe tip positions in CT coordinates (10 datasets)
+
+**Expected Accuracy:**
+- Debug datasets: All < 1.0 mm error (sub-millimeter precision!)
+- Best result: 0.005 mm mean error (pa2-debug-d)
+
+### 4. Run Tests
+
+```bash
+# Run all tests
 pytest programs/tests/ -v
 ```
 
-## Manual Processing (Individual Datasets)
-
-Process a single dataset step-by-step:
-
-```bash
-DATASET="pa1-debug-a"
-
-# 1. Generate frame registrations (4x4 transformation matrices)
-python pa1.py --name ${DATASET}-calbody --name_2 ${DATASET}-calreadings --output_file Fa_${DATASET}_registration
-python pa1.py --name ${DATASET}-calbody --name_2 ${DATASET}-calreadings --output_file Fd_${DATASET}_registration
-
-# 2. Perform pivot calibrations
-python pa1.py --name_3 ${DATASET}-empivot --output_file1 ${DATASET}_EM_pivot
-python pa1.py --name ${DATASET}-calbody --name_4 ${DATASET}-optpivot --output_file2 ${DATASET}_Optpivot
-
-# 3. Generate final output with expected C coordinates
-python pa1.py --name ${DATASET}-calbody --input_reg Fa_${DATASET}_registration --input_reg2 Fd_${DATASET}_registration --output_file ${DATASET}-output1
-```
 
 ## Project Structure
 
 ```
 .
 ├── programs/
-│   ├── frame_transform.py        # Point set registration & transformations
-│   ├── pivot_calibration.py      # EM and optical pivot calibration
-│   ├── utility_functions.py      # File I/O and data processing
-│   └── tests/                    # Unit tests (12 tests)
-├── pa1.py                        # Main CLI interface
-├── process_all_datasets.py       # Batch processing script
-├── PA 1 Student Data/            # Input datasets (7 debug + 4 unknown)
-├── output/                       # Generated results (created automatically)
-└── logging/                      # Log files (created automatically)
+│   ├── frame_transform.py
+│   ├── pivot_calibration.py
+│   ├── distortion_correction.py
+│   ├── utility_functions.py
+│   └── tests/
+│       ├── test_frame_transform.py
+│       ├── test_pivot_calibration.py
+│       └── test_distortion_correction.py
+├── pa1.py
+├── run_all_pa1.py
+├── run_all_pa2.py
+├── PA 1 Student Data/
+│   ├── pa1-debug-*.txt
+│   └── pa1-unknown-*.txt
+├── PA 2 Student Data/
+│   ├── pa2-debug-*.txt
+│   └── pa2-unknown-*.txt
+├── output/
+│   ├── pa1-*.txt
+│   └── pa2-*.txt
+└── logging/
 ```
 
 ## Input Data
 
-Input files are in `PA 1 Student Data/` directory:
+### PA1 Input Data
+
+**Location:** `PA 1 Student Data/` directory
+
+**Datasets:**
+- **Debug datasets:** `pa1-debug-a` through `pa1-debug-g` (7 datasets)
+- **Unknown datasets:** `pa1-unknown-h` through `pa1-unknown-k` (4 datasets)
+
+**Input Files:**
 
 | File | Format | Description |
 |------|--------|-------------|
@@ -89,43 +122,118 @@ Input files are in `PA 1 Student Data/` directory:
 | `*-calreadings.txt` | `N_D, N_A, N_C, N_frames` + data | Multi-frame calibration readings |
 | `*-empivot.txt` | `N_G, N_frames` + data | EM probe marker data |
 | `*-optpivot.txt` | `N_D, N_H, N_frames` + data | Optical tracking data |
+| `*-auxilliary1.txt` | (optional) | Auxiliary data files |
 
-All coordinates are in millimeters (mm).
+### PA2 Input Data
 
-## Output Files
+**Location:** `PA 2 Student Data/` directory
 
-Generated in `output/` directory:
+**Datasets:**
+- **Debug datasets:** `pa2-debug-a` through `pa2-debug-f` (6 datasets)
+- **Unknown datasets:** `pa2-unknown-g` through `pa2-unknown-j` (4 datasets)
+
+**Input Files:**
+
+| File | Format | Description |
+|------|--------|-------------|
+| `*-calbody.txt` | `N_D, N_A, N_C` + coordinates | Calibration body marker positions |
+| `*-calreadings.txt` | `N_D, N_A, N_C, N_frames` + data | Multi-frame calibration readings (for distortion correction) |
+| `*-empivot.txt` | `N_G, N_frames` + data | EM probe marker data (will be corrected for distortion) |
+| `*-optpivot.txt` | `N_D, N_H, N_frames` + data | Optical tracking data |
+| `*-em-fiducialss.txt` | `N_G, N_frames` + data | EM probe touching each fiducial |
+| `*-ct-fiducials.txt` | `N_B` + coordinates | Fiducial positions in CT image coordinates |
+| `*-EM-nav.txt` | `N_G, N_frames` + data | EM navigation frames to track |
+| `*-output1.txt` | `N_C, N_frames` + data | Expected C positions (debug datasets only) |
+| `*-auxilliary1.txt`, `*-auxilliary2.txt` | (optional) | Auxiliary data files |
+
+**Note:** All coordinates are in millimeters (mm).
+
+## Output Data
+
+### PA1 Output Data
+
+**Location:** `output/` directory
+
+**Output Files:**
 
 | File Type | Example | Description |
 |-----------|---------|-------------|
 | Frame registrations | `Fa_*_registration.txt`, `Fd_*_registration.txt` | 4x4 transformation matrices (flattened) |
 | Pivot calibrations | `*_EM_pivot.txt`, `*_Optpivot.txt` | Tip position, pivot point, residual error |
-| Final outputs | `*-output1.txt` | Complete results with C coordinates |
+| Final outputs | `pa1-*-output1.txt` | Complete results with C coordinates |
 
-**Pivot calibration output format:**
-```
-tip_x, tip_y, tip_z
-pivot_x, pivot_y, pivot_z
-residual_error, 0, 0
-```
+
+**Generated for:**
+- All debug datasets (a-g)
+- All unknown datasets (h-k)
+
+### PA2 Output Data
+
+**Location:** `output/` directory
+
+**Output Files:**
+
+| File Type | Example | Description |
+|-----------|---------|-------------|
+| Frame registrations(unknown only) | `pa2-*-Fa.txt`, `pa2-*-Fd.txt` | 4x4 transformation matrices (flattened) |
+| Pivot calibrations(unknown only) | `pa2-*-EM_pivot.txt`, `pa2-*-Optpivot.txt` | Tip position, pivot point, residual error |
+| Output1 (unknown only) | `pa2-unknown-*-output1.txt` | Expected C positions (auto-generated for unknown datasets) |
+| Output2 (all datasets) | `pa2-*-output2.txt` | Probe tip positions in CT coordinates |
+
+
+**Generated for:**
+- All debug datasets (a-f): Output2 files
+- All unknown datasets (g-j): Output1 and Output2 files, plus intermediate files (Fa, Fd, EM_pivot, Optpivot)
 
 ## Testing
 
 The test suite validates core algorithms using synthetic data with known ground truth:
 
+### PA1 Tests
+
 **Test Coverage (12 tests):**
-- Frame transformations (3 tests): transform, inverse, compose
-- Point set registration (5 tests): identity, translation, rotation, general, noise robustness
-- Pivot calibration (4 tests): least squares solver + EM/optical calibration with noise
+- **Frame transformations** (`test_frame_transform.py` - 8 tests):
+  - Transform operations (transform, inverse, compose)
+  - Point set registration (identity, translation, rotation, general transformations)
+  - Noise robustness testing
+- **Pivot calibration** (`test_pivot_calibration.py` - 4 tests):
+  - Least squares solver validation
+  - EM pivot calibration with synthetic data
+  - Optical pivot calibration with synthetic data
+  - Noise robustness testing
 
-**Run tests:**
+**Run PA1 tests:**
 ```bash
-# All tests
-pytest programs/tests/ -v
+# All PA1 tests
+pytest programs/tests/test_frame_transform.py programs/tests/test_pivot_calibration.py -v
 
-# Specific module
-pytest programs/tests/test_pivot_calibration.py -v
+# Specific PA1 module
 pytest programs/tests/test_frame_transform.py -v
+pytest programs/tests/test_pivot_calibration.py -v
+```
+
+### PA2 Tests
+
+**Test Coverage (6 tests):**
+- **Distortion correction** (`test_distortion_correction.py` - 6 tests):
+  - Zero distortion (identity correction)
+  - Linear distortion fitting and correction
+  - Quadratic distortion fitting and correction
+  - Single point correction
+  - Frame marker correction
+  - Correction consistency validation
+
+**Run PA2 tests:**
+```bash
+# All PA2 tests
+pytest programs/tests/test_distortion_correction.py -v
+```
+
+### Run All Tests
+
+```bash
+# All tests (PA1 + PA2)
+pytest programs/tests/ -v
 
 # With detailed output
 pytest programs/tests/ -v -s
@@ -133,23 +241,84 @@ pytest programs/tests/ -v -s
 
 ## Algorithm Details
 
-### Point Set Registration
+### PA1 Algorithms
+
+#### Point Set Registration
 - **Method**: SVD-based closed-form least squares
 - **Input**: Two corresponding point sets (source, target)
 - **Output**: Rotation matrix R and translation vector t
 - **Equation**: `target = R @ source + t`
+- **Application**: Register calibration body markers (A→D, C→D), optical tracker frames
 
-### EM Pivot Calibration
+#### EM Pivot Calibration
 - **Method**: Least squares optimization
-- **Input**: Multiple frames of probe marker positions
+- **Input**: Multiple frames of probe marker positions (EM tracker)
 - **Output**: Tip position (probe frame), pivot point (EM frame), residual error
 - **Constraint**: Pivot point remains fixed across all poses
+- **Equation**: `p_pivot = R_i @ p_tip + t_i` for all frames i
 
-### Optical Pivot Calibration
+#### Optical Pivot Calibration
 - **Method**: Integrated calibration using EM geometry
 - **Input**: Optical tracker data + calibration body geometry
-- **Steps**: Register optical→EM, transform probe markers, solve pivot equation
+- **Steps**:
+  1. Register optical→EM using calibration body
+  2. Transform probe markers to EM frame
+  3. Solve pivot equation using EM pivot calibration method
 - **Output**: Tip position (probe frame), pivot point (EM frame), residual error
+
+### PA2 Algorithms
+
+#### Distortion Correction
+- **Method**: 3D Bernstein (Bezier) polynomial fitting (degree 5)
+- **Input**: Distorted EM measurements and corresponding expected coordinates
+- **Model**: Tensor-product Bernstein polynomial that maps distorted coordinates to corrected coordinates
+  - The correction function is a 3D tensor product of Bernstein basis polynomials:
+    
+    $$
+    \hat{x}(\mathbf{u}) = \sum_{i=0}^{n} \sum_{j=0}^{n} \sum_{k=0}^{n} c_{ijk}^{(x)} \cdot B_i^{(n)}(u_x) \cdot B_j^{(n)}(u_y) \cdot B_k^{(n)}(u_z)
+    $$
+    
+    **Notation:**
+    - $\mathbf{u} = (u_x, u_y, u_z)$: scaled distorted coordinates (normalized to [0,1]³)
+    - $\hat{x}(\mathbf{u})$: corrected x-coordinate
+    - $n$: polynomial degree (typically 5)
+    - $B_i^{(n)}(t) = \binom{n}{i} t^i (1-t)^{n-i}$: i-th Bernstein basis polynomial of degree n
+    - $c_{ijk}^{(x)}$: fitted coefficients for the x-coordinate (total of $(n+1)^3$ coefficients)
+    - Similar equations apply for $\hat{y}(\mathbf{u})$ and $\hat{z}(\mathbf{u})$ with separate coefficient sets
+- **Steps**:
+  1. Scale distorted coordinates to [0,1]³ box
+  2. Fit coefficients using least squares (one per coordinate)
+  3. Apply correction by evaluating Bernstein polynomial
+- **Output**: Corrected coordinates with reduced EM tracker distortion
+
+#### Corrected EM Pivot Calibration
+- **Method**: EM pivot calibration with distortion correction applied
+- **Input**: EM probe data (distorted) + distortion correction model
+- **Steps**:
+  1. Apply distortion correction to all EM probe marker positions
+  2. Perform standard EM pivot calibration on corrected data
+- **Output**: Tip position (probe frame), pivot point (EM frame), residual error
+
+#### Fiducial Registration
+- **Method**: Point set registration (SVD-based) using fiducial pairs
+- **Input**: 
+  - Fiducial positions in EM tracker coordinates (from corrected probe measurements)
+  - Fiducial positions in CT image coordinates
+- **Output**: Transformation matrix EM→CT
+- **Application**: Register EM tracker space to CT image space for surgical navigation
+
+#### Surgical Navigation
+- **Method**: Transform probe tip positions to CT coordinates
+- **Input**: 
+  - EM navigation frames (distorted)
+  - Distortion correction model
+  - EM pivot calibration (tip position)
+  - EM→CT transformation (from fiducial registration)
+- **Steps**:
+  1. Apply distortion correction to navigation frames
+  2. Compute probe tip positions in EM tracker space
+  3. Transform to CT image coordinates using EM→CT registration
+- **Output**: Probe tip positions in CT image coordinates
 
 ## Citation
 

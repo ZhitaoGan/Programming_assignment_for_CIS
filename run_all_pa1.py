@@ -163,9 +163,9 @@ def main():
     print(f"Success rate: {total_success/total_operations*100:.1f}%")
     
     if total_success == total_operations:
-        print("🎉 All datasets processed successfully!")
+        print("All datasets processed successfully!")
     else:
-        print(f"⚠️  {total_operations - total_success} operations failed. Check the output above for details.")
+        print(f"{total_operations - total_success} operations failed. Check the output above for details.")
     
     # List generated files
     print(f"\nGenerated files in 'output' directory:")
