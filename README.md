@@ -38,10 +38,15 @@ python run_all_pa1.py
 ```
 
 This generates:
-- Frame registrations (Fa, Fd) for all datasets
-- EM and optical pivot calibrations
-- Final output files with expected C coordinates
-- Comparison with expected results for debug datasets
+1. **Frame registrations** (Fa, Fd) for all datasets
+2. **EM and optical pivot calibrations**
+3. **Final output files** with expected C coordinates
+4. **Comparison with expected results** for debug datasets
+
+**Output Files Generated:**
+- `output/Fa_*_registration.txt`, `output/Fd_*_registration.txt` - Frame transformation matrices
+- `output/*_EM_pivot.txt`, `output/*_Optpivot.txt` - Pivot calibration results
+- `output/pa1-*-output1.txt` - Final results with expected C coordinates (11 datasets)
 
 **Expected Results**: 55/55 operations successful
 
@@ -52,21 +57,21 @@ This generates:
 python run_all_pa2.py
 ```
 
-This automatically:
-1. **Generates output1 files** for unknown datasets (debug datasets already have them)
-2. **Performs distortion correction** using 3D Bernstein polynomials (degree 5)
-3. **Calibrates EM probe** with distortion correction applied
-4. **Computes fiducial positions** in EM tracker coordinates
-5. **Registers EM→CT** using point set registration
-6. **Tracks navigation points** and outputs probe tip positions in CT coordinates
+This generates:
+1. **Output1 files** for unknown datasets (debug datasets already have them)
+2. **Distortion correction** using 3D Bernstein polynomials (degree 5)
+3. **EM probe calibration** with distortion correction applied
+4. **Fiducial positions** in EM tracker coordinates
+5. **EM→CT registration** using point set registration
+6. **Navigation tracking** with probe tip positions in CT coordinates
 
 **Output Files Generated:**
-- `output/*-output1.txt` - Distortion calibration data (4 unknown datasets)
-- `output/*-output2.txt` - Final probe tip positions in CT coordinates (10 datasets)
+- `output/pa2-unknown-*-output1.txt` - Distortion calibration data (4 unknown datasets)
+- `output/pa2-*-output2.txt` - Final probe tip positions in CT coordinates (10 datasets)
+- `output/pa2-unknown-*-Fa.txt`, `output/pa2-unknown-*-Fd.txt` - Frame transformation matrices (unknown datasets only)
+- `output/pa2-unknown-*-EM_pivot.txt`, `output/pa2-unknown-*-Optpivot.txt` - Pivot calibration results (unknown datasets only)
 
-**Expected Accuracy:**
-- Debug datasets: All < 1.0 mm error (sub-millimeter precision!)
-- Best result: 0.005 mm mean error (pa2-debug-d)
+**Expected Results**: All debug datasets < 1.0 mm error (sub-millimeter precision, best result: 0.005 mm mean error for pa2-debug-d)
 
 ### 4. Run Tests
 
