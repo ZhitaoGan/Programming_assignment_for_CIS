@@ -597,6 +597,252 @@ def pa2_output2(empivot_file, em_fiducials_file, ct_fiducials_file, em_nav_file,
             f.write(f"{tip[0]:8.2f}, {tip[1]:8.2f}, {tip[2]:8.2f}\n")
 
 
+# ========== PA3 Functions ==========
+
+def read_body_markers_and_tip(file_path):
+    """
+    Read rigid body definition file (Problem3-BodyA or Problem3-BodyB).
+
+    File format:
+    - First line: N_markers ProblemX-BodyY.txt
+    - Next N_markers lines: xyz coordinates of LED markers in body coordinates
+    - Next line: xyz coordinates of tip in body coordinates
+
+    Args:
+        file_path (str): Path to the body definition file
+
+    Returns:
+        dict: Dictionary containing:
+            - 'N_markers': Number of LED markers
+            - 'markers': Array of marker positions in body coordinates, shape (N_markers, 3)
+            - 'tip': Tip position in body coordinates, shape (3,)
+            - 'name': Body name (e.g., "Problem3-BodyA")
+    """
+    try:
+        with open(file_path, 'r') as file:
+            # Read header line: "6 Problem3-BodyA.txt"
+            first_line = file.readline().strip().split()
+            N_markers = int(first_line[0])
+            body_name = first_line[1] if len(first_line) > 1 else ""
+
+            # Read marker positions (space-separated)
+            markers = []
+            for _ in range(N_markers):
+                line = file.readline().strip().split()
+                marker = [float(x) for x in line]
+                markers.append(marker)
+            markers = np.array(markers)
+
+            # Read tip position (space-separated)
+            tip_line = file.readline().strip().split()
+            tip = np.array([float(x) for x in tip_line])
+
+        return {
+            'N_markers': N_markers,
+            'markers': markers,
+            'tip': tip,
+            'name': body_name
+        }
+    except Exception as e:
+        print(f"Error reading body definition file from {file_path}: {e}")
+        return None
+
+
+def read_surface_mesh(file_path):
+    """
+    Read surface mesh file (ProblemXMesh.sur).
+
+    File format:
+    - First line: N_vertices
+    - Next N_vertices lines: xyz coordinates of vertices in CT coordinates
+    - Next line: N_triangles
+    - Next N_triangles lines: 6 integers per triangle
+      (i1, i2, i3, n1, n2, n3) where:
+      - i1, i2, i3 are vertex indices for the triangle
+      - n1, n2, n3 are neighbor triangle indices (not needed for PA3)
+
+    Args:
+        file_path (str): Path to the surface mesh file
+
+    Returns:
+        dict: Dictionary containing:
+            - 'N_vertices': Number of vertices
+            - 'vertices': Array of vertex positions in CT coordinates, shape (N_vertices, 3)
+            - 'N_triangles': Number of triangles
+            - 'triangles': Array of triangle vertex indices, shape (N_triangles, 3)
+            - 'neighbors': Array of neighbor triangle indices, shape (N_triangles, 3)
+    """
+    try:
+        with open(file_path, 'r') as file:
+            # Read number of vertices
+            N_vertices = int(file.readline().strip())
+
+            # Read vertex coordinates (space-separated)
+            vertices = []
+            for _ in range(N_vertices):
+                vertex = [float(x) for x in file.readline().strip().split()]
+                vertices.append(vertex)
+            vertices = np.array(vertices)
+
+            # Read number of triangles
+            N_triangles = int(file.readline().strip())
+
+            # Read triangle indices and neighbors (space-separated)
+            triangles = []
+            neighbors = []
+            for _ in range(N_triangles):
+                indices = [int(x) for x in file.readline().strip().split()]
+                triangles.append(indices[:3])  # First 3 are vertex indices
+                neighbors.append(indices[3:])  # Last 3 are neighbor indices
+            triangles = np.array(triangles)
+            neighbors = np.array(neighbors)
+
+        return {
+            'N_vertices': N_vertices,
+            'vertices': vertices,
+            'N_triangles': N_triangles,
+            'triangles': triangles,
+            'neighbors': neighbors
+        }
+    except Exception as e:
+        print(f"Error reading surface mesh file from {file_path}: {e}")
+        return None
+
+
+def read_sample_readings(file_path):
+    """
+    Read sample readings file (PA3-X-Debug/Unknown-SampleReadingsTest.txt).
+
+    File format:
+    - First line: N_s, N_samps, filename 0  (where N_s = N_A + N_B + N_D)
+    - For each sample (repeated N_samps times):
+      - Next N_A lines: xyz coordinates of A body LED markers in tracker coordinates
+      - Next N_B lines: xyz coordinates of B body LED markers in tracker coordinates
+      - Next N_D lines: xyz coordinates of dummy markers in tracker coordinates (if any)
+
+    Args:
+        file_path (str): Path to the sample readings file
+
+    Returns:
+        dict: Dictionary containing:
+            - 'N_s': Total number of markers per frame
+            - 'N_samps': Number of sample frames
+            - 'filename': Original filename
+            - 'data': Raw marker data array, shape (N_s * N_samps, 3)
+    """
+    try:
+        with open(file_path, 'r') as file:
+            # Read header line: "16, 15, PA3-A-Debug-SampleReadingsTest.txt 0"
+            first_line = file.readline().strip()
+            # Split by comma first
+            parts = first_line.split(',')
+            N_s = int(parts[0].strip())
+            N_samps = int(parts[1].strip())
+            # The filename might have spaces and a trailing 0
+            filename_part = parts[2].strip() if len(parts) > 2 else ""
+            filename = filename_part.split()[0] if filename_part else ""
+
+            # Read all marker data
+            data = np.loadtxt(file, delimiter=',')
+
+        return {
+            'N_s': N_s,
+            'N_samps': N_samps,
+            'filename': filename,
+            'data': data  # Raw data to be parsed with N_A, N_B info
+        }
+    except Exception as e:
+        print(f"Error reading sample readings file from {file_path}: {e}")
+        return None
+
+
+def parse_sample_readings(sample_data, N_A, N_B):
+    """
+    Parse raw sample readings data into structured frames.
+
+    Args:
+        sample_data (dict): Dictionary from read_sample_readings()
+        N_A (int): Number of A body markers
+        N_B (int): Number of B body markers
+
+    Returns:
+        dict: Dictionary containing:
+            - 'N_A': Number of A body markers
+            - 'N_B': Number of B body markers
+            - 'N_D': Number of dummy markers
+            - 'N_samps': Number of sample frames
+            - 'frames': List of dictionaries, each containing:
+                - 'a_markers': Array of A body marker positions, shape (N_A, 3)
+                - 'b_markers': Array of B body marker positions, shape (N_B, 3)
+                - 'd_markers': Array of dummy marker positions, shape (N_D, 3) (if any)
+    """
+    N_s = sample_data['N_s']
+    N_samps = sample_data['N_samps']
+    data = sample_data['data']
+
+    N_D = N_s - N_A - N_B
+
+    frames = []
+    for k in range(N_samps):
+        start_idx = k * N_s
+        end_idx = (k + 1) * N_s
+
+        frame_data = data[start_idx:end_idx]
+
+        a_markers = frame_data[:N_A]
+        b_markers = frame_data[N_A:N_A+N_B]
+        d_markers = frame_data[N_A+N_B:] if N_D > 0 else np.array([])
+
+        frames.append({
+            'a_markers': a_markers,
+            'b_markers': b_markers,
+            'd_markers': d_markers
+        })
+
+    return {
+        'N_A': N_A,
+        'N_B': N_B,
+        'N_D': N_D,
+        'N_samps': N_samps,
+        'frames': frames
+    }
+
+
+def write_pa3_output(output_file, results, output_dir="output"):
+    """
+    Write PA3 output file in the required format.
+
+    Output format:
+    - First line: N_samps "filename" 0
+    - For each sample: d_x d_y d_z c_x c_y c_z ||d_k - c_k||
+
+    Args:
+        output_file (str): Output file name (e.g., "PA3-A-Debug-Output")
+        results (list): List of result dictionaries, each containing:
+            - 'd_k': Pointer tip position in bone frame, shape (3,)
+            - 'c_k': Closest point on mesh, shape (3,)
+            - 'distance': Distance between d_k and c_k
+        output_dir (str): Output directory path
+    """
+    N_samps = len(results)
+
+    with open(f"{output_dir}/{output_file}.txt", 'w') as f:
+        # Header line: N_samps filename 0
+        f.write(f"{N_samps} {output_file}.txt 0\n")
+
+        # Write each sample result
+        for result in results:
+            d_k = result['d_k']
+            c_k = result['c_k']
+            distance = result['distance']
+
+            # Format: d_x d_y d_z c_x c_y c_z ||d_k - c_k||
+            # Use spaces (not commas) to match expected output format
+            f.write(f"{d_k[0]:8.2f} {d_k[1]:8.2f} {d_k[2]:8.2f}     "
+                   f"{c_k[0]:8.2f} {c_k[1]:8.2f} {c_k[2]:8.2f}  "
+                   f"{distance:8.3f}\n")
+
+
 
 
 
@@ -622,6 +868,12 @@ class UtilityFunctions:
         self.read_ct_fiducials = read_ct_fiducials
         self.compute_em_fiducials = compute_em_fiducials
         self.pa2_output2 = pa2_output2
+        # PA3 functions
+        self.read_body_markers_and_tip = read_body_markers_and_tip
+        self.read_surface_mesh = read_surface_mesh
+        self.read_sample_readings = read_sample_readings
+        self.parse_sample_readings = parse_sample_readings
+        self.write_pa3_output = write_pa3_output
 
 
 # Create an instance to be imported

@@ -34,9 +34,10 @@ def main():
         print("Usage: python test_runner.py <command>")
         print("Commands:")
         print("  all         - Run all tests")
-        print("  frame       - Run frame transform tests")
-        print("  pivot       - Run pivot calibration tests")
-        print("  distortion  - Run distortion correction tests")
+        print("  frame       - Run frame transform tests (PA1)")
+        print("  pivot       - Run pivot calibration tests (PA1)")
+        print("  distortion  - Run distortion correction tests (PA2)")
+        print("  icp         - Run ICP matching tests (PA3)")
         return
 
     command = sys.argv[1].lower()
@@ -49,6 +50,8 @@ def main():
         exit_code = run_specific_module("pivot_calibration")
     elif command == "distortion":
         exit_code = run_specific_module("distortion_correction")
+    elif command == "icp":
+        exit_code = run_specific_module("icp_matching")
     else:
         print(f"Unknown command: {command}")
         exit_code = 1

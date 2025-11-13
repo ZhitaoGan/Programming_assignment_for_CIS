@@ -18,6 +18,12 @@ This project implements core algorithms for surgical navigation systems:
 - **Fiducial Registration**: Compute EM→CT coordinate transformation using fiducials
 - **Surgical Navigation**: Track probe tip positions in CT image coordinates
 
+### Programming Assignment 3 (PA3)
+- **ICP Matching**: Implement matching component of Iterative Closest Point algorithm
+- **Rigid Body Tracking**: Track two rigid bodies (pointer and bone) using optical markers
+- **Surface Mesh Registration**: Find closest points on triangular bone surface mesh
+- **Pointer-to-Surface Matching**: Compute pointer tip position relative to bone surface
+
 ## Quick Start
 
 ### 1. Setup Environment
@@ -70,7 +76,32 @@ This generates:
 - `output/pa2-unknown-*-Fa.txt`, `output/pa2-unknown-*-Fd.txt` - Frame transformation matrices (unknown datasets only)
 - `output/pa2-unknown-*-EM_pivot.txt`, `output/pa2-unknown-*-Optpivot.txt` - Pivot calibration results (unknown datasets only)
 
-### 4. Run Tests
+### 4. Run Programming Assignment 3
+
+```bash
+# Process individual PA3 dataset
+python pa3.py A    # Debug dataset A
+python pa3.py G    # Unknown dataset G
+
+# Or process all debug datasets
+python pa3.py A && python pa3.py B && python pa3.py C && python pa3.py D && python pa3.py E && python pa3.py F
+```
+
+This generates:
+1. **Rigid body transformations** (F_A, F_B) for pointer and bone bodies
+2. **Pointer tip position** in bone coordinate frame (d_k)
+3. **Closest point on mesh** for each sample (c_k)
+4. **Distance measurements** between pointer tip and bone surface
+
+**Output Files Generated:**
+- `output/PA3-A-Debug-Output.txt` through `output/PA3-F-Debug-Output.txt` - Results for debug datasets (6 datasets)
+- `output/PA3-G-Unknown-Output.txt` through `output/PA3-J-Unknown-Output.txt` - Results for unknown datasets (3 datasets)
+
+**Available Datasets:**
+- Debug (with answer files): A, B, C, D, E, F
+- Unknown (no answer files): G, H, J
+
+### 5. Run Tests
 
 ```bash
 # Run all tests
@@ -86,12 +117,14 @@ python test_runner.py all
 │   ├── frame_transform.py
 │   ├── pivot_calibration.py
 │   ├── distortion_correction.py
+│   ├── icp_matching.py
 │   ├── utility_functions.py
 │   └── tests/
 │       ├── test_frame_transform.py
 │       ├── test_pivot_calibration.py
 │       └── test_distortion_correction.py
 ├── pa1.py
+├── pa3.py
 ├── run_all_pa1.py
 ├── run_all_pa2.py
 ├── PA 1 Student Data/
@@ -100,9 +133,16 @@ python test_runner.py all
 ├── PA 2 Student Data/
 │   ├── pa2-debug-*.txt
 │   └── pa2-unknown-*.txt
+├── 2025 PA345 Student Data/
+│   ├── Problem3-BodyA.txt
+│   ├── Problem3-BodyB.txt
+│   ├── Problem3Mesh.sur
+│   ├── PA3-*-Debug-SampleReadingsTest.txt
+│   └── PA3-*-Unknown-SampleReadingsTest.txt
 ├── output/
 │   ├── pa1-*.txt
-│   └── pa2-*.txt
+│   ├── pa2-*.txt
+│   └── PA3-*-Output.txt
 └── logging/
 ```
 
@@ -148,7 +188,25 @@ python test_runner.py all
 | `*-output1.txt` | `N_C, N_frames` + data | Expected C positions (debug datasets only) |
 | `*-auxilliary1.txt`, `*-auxilliary2.txt` | (optional) | Auxiliary data files |
 
-**Note:** All coordinates are in millimeters (mm).
+### PA3 Input Data
+
+**Location:** `2025 PA345 Student Data/` directory
+
+**Datasets:**
+- **Debug datasets:** `PA3-A-Debug` through `PA3-F-Debug` (6 datasets)
+- **Unknown datasets:** `PA3-G-Unknown`, `PA3-H-Unknown`, `PA3-J-Unknown` (3 datasets)
+
+**Input Files:**
+
+| File | Format | Description |
+|------|--------|-------------|
+| `Problem3-BodyA.txt` | `N_markers` + coordinates + tip | Rigid body A (pointer) definition in body coordinates |
+| `Problem3-BodyB.txt` | `N_markers` + coordinates + tip | Rigid body B (bone-attached) definition in body coordinates |
+| `Problem3Mesh.sur` | `N_vertices`, vertices, `N_triangles`, triangles | Bone surface mesh (vertices + triangle indices) |
+| `PA3-*-SampleReadingsTest.txt` | `N_s, N_samps` + marker data | LED marker positions in tracker coordinates |
+| `PA3-*-Output.txt` | (debug only) | Expected output for validation |
+
+**Note:** Problem3-BodyA.txt, Problem3-BodyB.txt, and Problem3Mesh.sur are shared across all PA3 datasets. All coordinates are in millimeters (mm).
 
 ## Output Data
 
@@ -186,6 +244,27 @@ python test_runner.py all
 **Generated for:**
 - All debug datasets (a-f): Output2 files
 - All unknown datasets (g-j): Output1 and Output2 files, plus intermediate files (Fa, Fd, EM_pivot, Optpivot)
+
+### PA3 Output Data
+
+**Location:** `output/` directory
+
+**Output Files:**
+
+| File Type | Example | Description |
+|-----------|---------|-------------|
+| ICP matching results | `PA3-*-Output.txt` | Pointer tip position (d_k), closest point on mesh (c_k), distance |
+
+**Output Format:**
+- Header: `N_samps filename 0`
+- Each line: `d_x d_y d_z c_x c_y c_z distance`
+  - `d_k = (d_x, d_y, d_z)`: Pointer tip position in bone coordinate frame
+  - `c_k = (c_x, c_y, c_z)`: Closest point on bone surface mesh
+  - `distance = ||d_k - c_k||`: Distance from pointer tip to mesh surface (mm)
+
+**Generated for:**
+- All debug datasets (A-F): 6 output files with answer file comparison
+- All unknown datasets (G, H, J): 3 output files (no answer files)
 
 ## Testing
 
@@ -231,10 +310,34 @@ python test_runner.py all
 python test_runner.py distortion
 ```
 
+### PA3 Tests
+
+**Test Coverage (11 tests):**
+- **Closest point on triangle** (`test_icp_matching.py` - 5 tests):
+  - Point inside triangle
+  - Point on triangle vertex
+  - Point on triangle edge
+  - Point outside triangle near vertex
+  - Point in triangle plane
+- **Project on segment** (`test_icp_matching.py` - 3 tests):
+  - Project onto segment midpoint
+  - Project clamped to segment endpoint
+  - Degenerate segment (point)
+- **Closest point on mesh** (`test_icp_matching.py` - 3 tests):
+  - Simple two-triangle mesh
+  - Closest to mesh vertex
+  - Single triangle mesh
+
+**Run PA3 tests:**
+```bash
+# All PA3 tests
+python test_runner.py icp
+```
+
 ### Run All Tests
 
 ```bash
-# All tests (PA1 + PA2)
+# All tests (PA1 + PA2 + PA3 = 29 tests total)
 python test_runner.py all
 ```
 
@@ -243,6 +346,7 @@ python test_runner.py all
 - `python test_runner.py frame` - Run frame transform tests (PA1)
 - `python test_runner.py pivot` - Run pivot calibration tests (PA1)
 - `python test_runner.py distortion` - Run distortion correction tests (PA2)
+- `python test_runner.py icp` - Run ICP matching tests (PA3)
 
 ## Algorithm Details
 
@@ -314,7 +418,7 @@ python test_runner.py all
 
 #### Surgical Navigation
 - **Method**: Transform probe tip positions to CT coordinates
-- **Input**: 
+- **Input**:
   - EM navigation frames (distorted)
   - Distortion correction model
   - EM pivot calibration (tip position)
@@ -324,6 +428,61 @@ python test_runner.py all
   2. Compute probe tip positions in EM tracker space
   3. Transform to CT image coordinates using EM→CT registration
 - **Output**: Probe tip positions in CT image coordinates
+
+### PA3 Algorithms
+
+#### Rigid Body Tracking
+- **Method**: Point set registration for two rigid bodies with LED markers
+- **Input**:
+  - Rigid body definitions (A and B) with marker positions in body coordinates
+  - Optical tracker readings of LED markers
+- **Steps**:
+  1. Register body A markers to tracker coordinates → F_A
+  2. Register body B markers to tracker coordinates → F_B
+  3. Compute pointer tip in bone frame: d_k = F_B⁻¹ · F_A · A_tip
+- **Output**: Pointer tip position in bone coordinate frame
+
+#### Find Closest Point on Triangle
+- **Method**: Least squares projection with barycentric coordinates (from lecture slides 11-13)
+- **Input**: Query point `a` and triangle vertices `[p, q, r]`
+- **Steps**:
+  1. Solve least squares: `a - p ≈ λ(q-p) + μ(r-p)` for λ, μ
+  2. Compute projection: `c = p + λ(q-p) + μ(r-p)`
+  3. Check if inside triangle: `λ ≥ 0 AND μ ≥ 0 AND λ+μ ≤ 1`
+     - If inside: return `c`
+     - If outside: project onto appropriate edge
+  4. Edge projection cases:
+     - If `λ < 0`: project onto edge `[r, p]`
+     - If `μ < 0`: project onto edge `[p, q]`
+     - If `λ+μ > 1`: project onto edge `[q, r]`
+- **Output**: Closest point on triangle and distance
+
+#### Find Closest Point on Mesh
+- **Method**: Linear search through all triangles (brute force)
+- **Input**: Query point and triangular mesh (vertices + triangle indices)
+- **Steps**:
+  1. For each triangle in mesh:
+     - Find closest point on that triangle
+     - Track minimum distance
+  2. Return closest point across all triangles
+- **Output**: Closest point on mesh surface (c_k) and distance
+- **Note**: Linear search is acceptable for PA3. Can be optimized with spatial data structures (bounding sphere tree, k-d tree) for larger meshes.
+
+#### ICP Matching (PA3)
+- **Method**: Single iteration of ICP matching algorithm (no refinement loop)
+- **Input**:
+  - Rigid body definitions (A and B)
+  - Bone surface mesh
+  - Sample readings (LED marker positions)
+  - F_reg = Identity (for PA3)
+- **Steps**:
+  1. Compute rigid body transformations (F_A, F_B)
+  2. Compute pointer tip in bone frame: d_k = F_B⁻¹ · F_A · A_tip
+  3. Apply F_reg: s_k = F_reg · d_k (for PA3: s_k = d_k since F_reg = I)
+  4. Find closest point on mesh: c_k
+  5. Compute distance: ||s_k - c_k||
+- **Output**: d_k, c_k, and distance for each sample frame
+- **Note**: PA4 will add iterative refinement loop to update F_reg
 
 ## Citation
 
