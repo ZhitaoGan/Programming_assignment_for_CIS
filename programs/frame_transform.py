@@ -94,6 +94,16 @@ class FrameTransform:
         return FrameTransform(composed_rotation, composed_translation)
 
     @staticmethod
+    def identity() -> 'FrameTransform':
+        """
+        Create an identity transformation (no rotation, no translation).
+
+        Returns:
+            FrameTransform: Identity transformation
+        """
+        return FrameTransform()
+
+    @staticmethod
     def Point_set_registration(point_set_1: np.ndarray, point_set_2: np.ndarray, weights: np.ndarray=None) -> 'FrameTransform':
         """
         Register two point sets using the Point Set Registration algorithm.

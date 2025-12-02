@@ -194,3 +194,83 @@ def process_pa3_frame(body_A, body_B, mesh, frame_data, F_reg=None):
         'distance': distance,
         'triangle_index': mesh_result['triangle_index']
     }
+
+
+def run_icp_on_all_frames(body_A, body_B, mesh, all_frames, max_iterations=100, convergence_threshold=1e-6):
+    """
+    Run complete ICP algorithm on all frames with iterative refinement.
+
+    Algorithm:
+        1. Initialize F_reg = Identity
+        2. For each iteration:
+           a. For each frame k: compute d_k, apply F_reg to get s_k, find c_k
+           b. Register {d_k} -> {c_k} to get F_reg_new
+           c. Check convergence
+           d. Update F_reg = F_reg_new
+        3. Return final results for all frames
+
+    Args:
+        body_A, body_B (dict): Body definitions
+        mesh (dict): Surface mesh
+        all_frames (list): List of frame_data dicts with marker positions
+        max_iterations (int): Maximum number of ICP iterations
+        convergence_threshold (float): Convergence threshold for F_reg change
+
+    Returns:
+        dict: 'results' (list of frame results), 'F_reg' (final transformation),
+              'iterations' (number of iterations), 'converged' (bool)
+    """
+    # Initialize F_reg to identity
+    F_reg = FrameTransform.identity()
+
+    converged = False
+    num_iterations = 0
+    final_results = []
+
+    for iteration in range(max_iterations):
+        # Step 1: Process all frames with current F_reg
+        all_d_k = []
+        all_c_k = []
+        current_results = []
+
+        for frame_data in all_frames:
+            result = process_pa3_frame(body_A, body_B, mesh, frame_data, F_reg)
+            all_d_k.append(result['d_k'])
+            all_c_k.append(result['c_k'])
+            current_results.append(result)
+
+        # Convert to numpy arrays
+        all_d_k = np.array(all_d_k)  # (N, 3)
+        all_c_k = np.array(all_c_k)  # (N, 3)
+
+        # Step 2: Register {d_k} -> {c_k} to get new F_reg
+        F_reg_new = FrameTransform.Point_set_registration(all_d_k, all_c_k)
+
+        # Step 3: Check convergence - compare rotation matrices and translation vectors
+        rotation_diff = np.linalg.norm(F_reg_new.rotation_matrix - F_reg.rotation_matrix, 'fro')
+        translation_diff = np.linalg.norm(F_reg_new.translation_vector - F_reg.translation_vector)
+
+        total_change = rotation_diff + translation_diff
+
+        # Update F_reg for next iteration
+        F_reg = F_reg_new
+        num_iterations = iteration + 1
+
+        if total_change < convergence_threshold:
+            converged = True
+            # Recompute results with converged F_reg
+            final_results = []
+            for frame_data in all_frames:
+                result = process_pa3_frame(body_A, body_B, mesh, frame_data, F_reg)
+                final_results.append(result)
+            break
+
+        # Save current results in case we hit max iterations
+        final_results = current_results
+
+    return {
+        'results': final_results,
+        'F_reg': F_reg,
+        'iterations': num_iterations,
+        'converged': converged
+    }

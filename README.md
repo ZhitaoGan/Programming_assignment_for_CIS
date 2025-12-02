@@ -24,6 +24,12 @@ This project implements core algorithms for surgical navigation systems:
 - **Surface Mesh Registration**: Find closest points on triangular bone surface mesh
 - **Pointer-to-Surface Matching**: Compute pointer tip position relative to bone surface
 
+### Programming Assignment 4 (PA4)
+- **Complete ICP Algorithm**: Full Iterative Closest Point with iterative refinement
+- **Registration Refinement**: Iteratively update F_reg transformation until convergence
+- **Point-to-Mesh Registration**: Register pointer tip positions to bone surface mesh
+- **Convergence Optimization**: Automatic convergence detection based on transformation change
+
 ## Quick Start
 
 ### 1. Setup Environment
@@ -101,7 +107,40 @@ This generates:
 - Debug (with answer files): A, B, C, D, E, F
 - Unknown (no answer files): G, H, J
 
-### 5. Run Tests
+### 5. Run Programming Assignment 4
+
+```bash
+# Process individual PA4 dataset
+python pa4.py A              # Debug dataset A
+python pa4.py G              # Unknown dataset G
+
+# Process Demo variants (only A and B have Demo variants)
+python pa4.py A Demo-Fast    # Fast convergence scenario
+python pa4.py A Demo-Slow    # Slow convergence scenario
+python pa4.py B Demo-Fast
+python pa4.py B Demo-Slow
+
+# Process all datasets (debug, demo, and unknown)
+python pa4.py A && python pa4.py B && python pa4.py C && python pa4.py D && python pa4.py E && python pa4.py F && python pa4.py A Demo-Fast && python pa4.py A Demo-Slow && python pa4.py B Demo-Fast && python pa4.py B Demo-Slow && python pa4.py G && python pa4.py H && python pa4.py J && python pa4.py K
+```
+
+This generates:
+1. **Complete ICP algorithm** with iterative refinement of F_reg
+2. **Registered pointer tip positions** in bone coordinate frame (s_k = F_reg · d_k)
+3. **Closest point on mesh** for each sample (c_k)
+4. **Distance measurements** between registered tip and bone surface
+
+**Output Files Generated:**
+- `output/PA4-A-Debug-Output.txt` through `output/PA4-F-Debug-Output.txt` - Results for debug datasets (6 files)
+- `output/PA4-A-Demo-Fast-Output.txt`, `output/PA4-A-Demo-Slow-Output.txt`, etc. - Results for demo variants (4 files)
+- `output/PA4-G-Unknown-Output.txt` through `output/PA4-K-Unknown-Output.txt` - Results for unknown datasets (4 files)
+
+**Available Datasets:**
+- Debug (with answer files): A, B, C, D, E, F
+- Demo variants (A-B only): Demo-Fast, Demo-Slow - demonstrate different ICP convergence speeds
+- Unknown (no answer files): G, H, J, K
+
+### 6. Run Tests
 
 ```bash
 # Run all tests
@@ -122,9 +161,11 @@ python test_runner.py all
 │   └── tests/
 │       ├── test_frame_transform.py
 │       ├── test_pivot_calibration.py
-│       └── test_distortion_correction.py
+│       ├── test_distortion_correction.py
+│       └── test_icp_matching.py
 ├── pa1.py
 ├── pa3.py
+├── pa4.py
 ├── run_all_pa1.py
 ├── run_all_pa2.py
 ├── PA 1 Student Data/
@@ -188,13 +229,20 @@ python test_runner.py all
 | `*-output1.txt` | `N_C, N_frames` + data | Expected C positions (debug datasets only) |
 | `*-auxilliary1.txt`, `*-auxilliary2.txt` | (optional) | Auxiliary data files |
 
-### PA3 Input Data
+### PA3 and PA4 Input Data
 
 **Location:** `2025 PA345 Student Data/` directory
 
-**Datasets:**
+**PA3 Datasets:**
 - **Debug datasets:** `PA3-A-Debug` through `PA3-F-Debug` (6 datasets)
 - **Unknown datasets:** `PA3-G-Unknown`, `PA3-H-Unknown`, `PA3-J-Unknown` (3 datasets)
+
+**PA4 Datasets:**
+- **Debug datasets:** `PA4-A-Debug` through `PA4-F-Debug` (6 datasets)
+- **Demo variants:** `PA4-A-Demo-Fast`, `PA4-A-Demo-Slow`, `PA4-B-Demo-Fast`, `PA4-B-Demo-Slow` (4 datasets)
+  - Demo-Fast: Scenarios with good initial alignment (converge quickly)
+  - Demo-Slow: Scenarios with poor initial alignment (require more iterations)
+- **Unknown datasets:** `PA4-G-Unknown`, `PA4-H-Unknown`, `PA4-J-Unknown`, `PA4-K-Unknown` (4 datasets)
 
 **Input Files:**
 
@@ -203,10 +251,12 @@ python test_runner.py all
 | `Problem3-BodyA.txt` | `N_markers` + coordinates + tip | Rigid body A (pointer) definition in body coordinates |
 | `Problem3-BodyB.txt` | `N_markers` + coordinates + tip | Rigid body B (bone-attached) definition in body coordinates |
 | `Problem3Mesh.sur` | `N_vertices`, vertices, `N_triangles`, triangles | Bone surface mesh (vertices + triangle indices) |
-| `PA3-*-SampleReadingsTest.txt` | `N_s, N_samps` + marker data | LED marker positions in tracker coordinates |
-| `PA3-*-Output.txt` | (debug only) | Expected output for validation |
+| `PA3-*-SampleReadingsTest.txt` | `N_s, N_samps` + marker data | LED marker positions in tracker coordinates (PA3) |
+| `PA4-*-SampleReadingsTest.txt` | `N_s, N_samps` + marker data | LED marker positions in tracker coordinates (PA4) |
+| `PA3-*-Output.txt` | (debug only) | Expected output for validation (PA3) |
+| `PA4-*-Answer.txt` | (debug only) | Expected output for validation (PA4) |
 
-**Note:** Problem3-BodyA.txt, Problem3-BodyB.txt, and Problem3Mesh.sur are shared across all PA3 datasets. All coordinates are in millimeters (mm).
+**Note:** Problem3-BodyA.txt, Problem3-BodyB.txt, and Problem3Mesh.sur are shared across all PA3 and PA4 datasets. All coordinates are in millimeters (mm).
 
 ## Output Data
 
@@ -245,26 +295,42 @@ python test_runner.py all
 - All debug datasets (a-f): Output2 files
 - All unknown datasets (g-j): Output1 and Output2 files, plus intermediate files (Fa, Fd, EM_pivot, Optpivot)
 
-### PA3 Output Data
+### PA3 and PA4 Output Data
 
 **Location:** `output/` directory
 
-**Output Files:**
+**PA3 Output Files:**
 
 | File Type | Example | Description |
 |-----------|---------|-------------|
 | ICP matching results | `PA3-*-Output.txt` | Pointer tip position (d_k), closest point on mesh (c_k), distance |
 
-**Output Format:**
+**PA3 Output Format:**
 - Header: `N_samps filename 0`
 - Each line: `d_x d_y d_z c_x c_y c_z distance`
   - `d_k = (d_x, d_y, d_z)`: Pointer tip position in bone coordinate frame
   - `c_k = (c_x, c_y, c_z)`: Closest point on bone surface mesh
   - `distance = ||d_k - c_k||`: Distance from pointer tip to mesh surface (mm)
 
+**PA4 Output Files:**
+
+| File Type | Example | Description |
+|-----------|---------|-------------|
+| Complete ICP results | `PA4-*-Output.txt` | Registered tip position (s_k), closest point on mesh (c_k), distance |
+
+**PA4 Output Format:**
+- Header: `N_samps filename 0`
+- Each line: `s_x s_y s_z c_x c_y c_z distance`
+  - `s_k = (s_x, s_y, s_z)`: Registered pointer tip position (s_k = F_reg · d_k) in bone coordinate frame
+  - `c_k = (c_x, c_y, c_z)`: Closest point on bone surface mesh
+  - `distance = ||s_k - c_k||`: Distance from registered tip to mesh surface (mm)
+
 **Generated for:**
-- All debug datasets (A-F): 6 output files with answer file comparison
-- All unknown datasets (G, H, J): 3 output files (no answer files)
+- **PA3**: Debug datasets (A-F): 6 output files with answer file comparison; Unknown datasets (G, H, J): 3 output files
+- **PA4**:
+  - Debug datasets (A-F): 6 output files with answer file comparison
+  - Demo variants (A-B only): 4 output files (Demo-Fast and Demo-Slow for datasets A and B)
+  - Unknown datasets (G, H, J, K): 4 output files
 
 ## Testing
 
@@ -483,6 +549,30 @@ python test_runner.py all
   5. Compute distance: ||s_k - c_k||
 - **Output**: d_k, c_k, and distance for each sample frame
 - **Note**: PA4 will add iterative refinement loop to update F_reg
+
+### PA4 Algorithms
+
+#### Complete ICP Algorithm (PA4)
+- **Method**: Full Iterative Closest Point algorithm with iterative refinement
+- **Input**:
+  - Rigid body definitions (A and B)
+  - Bone surface mesh
+  - Sample readings (LED marker positions)
+  - Max iterations and convergence threshold
+- **Algorithm**:
+  1. Initialize F_reg = Identity
+  2. For each iteration (until convergence or max iterations):
+     - For each frame k:
+       - Compute d_k = F_B_k⁻¹ · F_A_k · A_tip
+       - Apply current F_reg: s_k = F_reg · d_k
+       - Find closest point on mesh: c_k
+     - Update F_reg using point set registration: F_reg_new = Register({d_k}, {c_k})
+     - Check convergence: ||F_reg_new - F_reg|| < threshold
+     - Update F_reg = F_reg_new
+  3. Compute final results with converged F_reg
+- **Output**: s_k, c_k, distance, final F_reg, and iteration count
+- **Convergence**: Based on change in rotation matrix and translation vector between iterations
+- **Key Difference from PA3**: F_reg is iteratively refined instead of remaining identity
 
 ## Citation
 

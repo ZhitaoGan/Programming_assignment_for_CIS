@@ -843,6 +843,39 @@ def write_pa3_output(output_file, results, output_dir="output"):
                    f"{distance:8.3f}\n")
 
 
+def write_pa4_output(output_file, results, output_dir="output"):
+    """
+    Write PA4 output file in the required format.
+
+    Output format:
+    - First line: N_samps "filename" 0
+    - For each sample: s_x s_y s_z c_x c_y c_z ||s_k - c_k||
+
+    Args:
+        output_file (str): Output file name (e.g., "PA4-A-Debug-Output")
+        results (list): List of result dictionaries, each containing:
+            - 's_k': Registered pointer tip position (F_reg * d_k), shape (3,)
+            - 'c_k': Closest point on mesh, shape (3,)
+            - 'distance': Distance between s_k and c_k
+        output_dir (str): Output directory path
+    """
+    N_samps = len(results)
+
+    with open(f"{output_dir}/{output_file}.txt", 'w') as f:
+        # Header line: N_samps filename 0
+        f.write(f"{N_samps} {output_file}.txt 0\n")
+
+        # Write each sample result
+        for result in results:
+            s_k = result['s_k']  # Note: PA4 outputs s_k (not d_k)
+            c_k = result['c_k']
+            distance = result['distance']
+
+            # Format: s_x s_y s_z c_x c_y c_z ||s_k - c_k||
+            # Use spaces (not commas) to match expected output format
+            f.write(f"{s_k[0]:8.2f} {s_k[1]:8.2f} {s_k[2]:8.2f}     "
+                   f"{c_k[0]:8.2f} {c_k[1]:8.2f} {c_k[2]:8.2f}  "
+                   f"{distance:8.3f}\n")
 
 
 
@@ -874,6 +907,8 @@ class UtilityFunctions:
         self.read_sample_readings = read_sample_readings
         self.parse_sample_readings = parse_sample_readings
         self.write_pa3_output = write_pa3_output
+        # PA4 functions
+        self.write_pa4_output = write_pa4_output
 
 
 # Create an instance to be imported
